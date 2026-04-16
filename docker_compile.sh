@@ -1,7 +1,7 @@
 #!/bin/bash
 
 IMAGE_NAME="hoverboard-foc-pio-builder"
-ENV_NAME=${1:-"VARIANT_PWM_BL"}
+ENV_NAME=${1:-"VARIANT_USART_BL"}
 
 # 1. 检查镜像
 if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
