@@ -1,5 +1,6 @@
 !build/hover.hex
 .pio/
+.pio_core/
 .pioenvs/
 .vscode/
 MDK-ARM/DebugConfig/
