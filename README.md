@@ -76,6 +76,38 @@ In this firmware 3 control types are available, it can be set in config.h file v
 
 In all FOC control modes, the controller features maximum motor speed and maximum motor current protection. This brings great advantages to fulfil the needs of many robotic applications while maintaining safe operation.
 
+### UART3 (PB10/PB11) Bootloader + OTA (64KB flash layout)
+
+This repository now includes a compact UART bootloader (`bootloader/main.c`) designed for **64KB flash devices**:
+
+- **Bootloader area**: `0x08000000 - 0x08003FFF` (16KB)
+- **Application area**: `0x08004000 - 0x0800FFFF` (48KB)
+- **UART for OTA/debug**: `USART3` on **PB10 (TX)** / **PB11 (RX)**, `115200-8N1`
+
+Build commands:
+
+- Bootloader: `make -C bootloader`
+- Application (64KB layout): `make app64`
+
+Flash order:
+
+1. Flash bootloader to `0x08000000`
+2. Flash application (built with `STM32F103C8_APP_FLASH.ld`) to `0x08004000`
+
+The bootloader uses a packet protocol over USART3 for OTA:
+
+- `CMD_PING (0x01)`: version query
+- `CMD_INFO (0x02)`: returns app base and max size
+- `CMD_ERASE (0x03)`: erase app area
+- `CMD_WRITE (0x04)`: write app chunks to flash
+- `CMD_BOOT (0x05)`: jump to app
+
+Frame format:
+
+`SOF(0x7E) | CMD(1B) | LEN(2B) | PAYLOAD | CRC16-CCITT(2B)`
+
+On reset, the bootloader waits about 1.5s for a valid OTA frame; if none is received and the app image looks valid, it jumps to the app.
+
 
 ### Field Weakening / Phase Advance
 

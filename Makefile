@@ -178,6 +178,10 @@ clean:
 flash:
 	st-flash --reset write $(BUILD_DIR)/$(TARGET).bin 0x8000000
 
+app64:
+	$(MAKE) clean
+	$(MAKE) LDSCRIPT=STM32F103C8_APP_FLASH.ld C_DEFS="$(C_DEFS) -DAPP_VECT_TAB_OFFSET=0x00004000U"
+
 unlock:
 	openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c init -c "reset halt" -c "stm32f1x unlock 0"
 
