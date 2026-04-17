@@ -1574,6 +1574,14 @@ void poweroff(void) {
   while(1) {}
 }
 
+int8_t rebootSystem(void) {
+  #if defined(DEBUG_SERIAL_USART2) || defined(DEBUG_SERIAL_USART3)
+    printf("Rebooting to Bootloader...\r\n");
+    HAL_Delay(100);
+  #endif
+  HAL_NVIC_SystemReset();
+  return 1;
+}
 
 void poweroffPressCheck(void) {
   #if !defined(VARIANT_HOVERBOARD) && !defined(VARIANT_TRANSPOTTER)

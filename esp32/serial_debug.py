@@ -8,9 +8,13 @@ import sys
 # ============================================================
 # Hoverboard Serial Debugger (ESP32 Bridge Mode)
 # ============================================================
-# 支持:
-# 1. 自动解析 ESP32 返回的 Telemetry 数据 (0x90)
-# 2. 发送驱动指令 (DRIVE 0x10) 控制轮子
+# 使用描述：
+# sudo python3 serial_debug.py <drive> <speed>
+# 功能描述:
+# drive <speed> 按指定速度和方向驱动
+# load_bin <bin_path> 将指定的bin文件发送给esp32,esp32将bin文件存储起来。
+# ota 将存储的bin文件进行ota升级。并汇报升级进度。
+# info 显示温度速度电压等信息。
 # ============================================================
 
 PKT_SOF = 0x7E

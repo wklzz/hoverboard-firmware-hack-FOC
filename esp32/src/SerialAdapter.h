@@ -17,7 +17,8 @@ public:
     }
 
     void send(const uint8_t* data, size_t len) override {
-        _stream.write(data, len);
+        // 静默串口回显，防止二进制数据干扰调试
+        // _stream.write(data, len);
     }
 
     void stop() override {

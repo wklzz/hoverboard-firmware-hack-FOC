@@ -7,18 +7,18 @@
 ## 一、系统架构
 
 ```
-手机/电脑
-  │ BLE (Nordic UART) 或 HTTP POST /ota
-  ▼
+手机/电脑             RC 遥控接收机
+  │ BLE/WiFi              │ PWM (CH1/CH2)
+  ▼                       ▼
 ESP32
-  ├── AdapterFactory (BLEAdapter | WiFiAdapter)
+  ├── AdapterFactory (BLE | WiFi | PWM)
   ├── HoverConnector  ── CRC 校验 & 帧解析
   ├── StateMachine    ── 安全状态过滤
-  └── UART2 (TX=GPIO17, RX=GPIO16)
+  └── UART1 (TX=GPIO4, RX=GPIO5)
         │ 115200 baud
         ▼
-STM32 Bootloader (PB10/PB11)
-  └── CMD_ERASE → CMD_WRITE → CMD_BOOT → 主固件
+STM32 Bootloader / Main Firmware
+  └── OTA 模式 ↔ Runtime 模式
 ```
 
 ### 协议类型 A — STM32 Bootloader 协议 (OTA 模式)
@@ -109,19 +109,40 @@ RUNNING 状态下拒绝 ERASE / WRITE / BOOT
 
 ---
 
+### PWM 控制适配器 (RC 遥控支持)
+
+ESP32 具备硬件 PWM 信号捕获能力，可作为无线接收机与平衡车主板之间的智能桥梁。
+
+*   **引脚分配**:
+    *   **GPIO 6**: 捕获 CH1 (通常为方向控制)
+    *   **GPIO 7**: 捕获 CH2 (通常为速度控制)
+*   **信号处理**:
+    *   标准 1000µs ~ 2000µs 脉宽自动映射至协议 B 的 `-1000 ~ 1000` 范围。
+    *   内置 1500µs ±20µs 死区，防止零点漂移。
+*   **安全保护**:
+    *   **失控保护**: 若丢失信号超过 500ms，适配器自动向 STM32 发送零速度指令并报警。
+    *   **模式隔离**: 只有在模式切换为 `1` (PWM 模式) 时，手动遥控才会生效，避免与手机指令冲突。
+*   **持久化切换**:
+    *   使用 `ble_debug.py` 的 `mode 1` 命令可在线切换。
+    *   设置保存于 ESP32 NVS，断电重启后模式保持一致。
+
+---
+
 ## 二、工程文件结构
 
 ```
 esp32/
 ├── src/
-│   ├── main.cpp         # 程序入口，模式选择
+│   ├── main.cpp         # 程序入口，NVS 模式持久化逻辑
 │   ├── protocol.h       # 二进制协议 & CRC16
 │   ├── IAdapter.h       # 适配器抽象接口
 │   ├── AdapterFactory.h # 工厂类
 │   ├── BLEAdapter.h     # BLE 适配器（Nordic UART Service）
 │   ├── WiFiAdapter.h    # WiFi 适配器（HTTP OTA 端点）
+│   ├── PwmAdapter.h     # PWM 捕获适配器（捕获 RC 信号）
 │   ├── StateMachine.h   # 安全状态机
-│   └── HoverConnector.h # 核心连接器（解析/转发/状态管理）
+│   └── HoverConnector.h # 核心连接器（解析/转发/状态管理/上电静音）
+├── ble_debug.py         # 强大的 Python BLE 调试 & OTA 脚本
 ├── platformio.ini       # PlatformIO 双环境配置
 ├── Dockerfile           # 预装工具链的编译镜像
 ├── build.sh             # 一键编译 & 烧录脚本
@@ -136,8 +157,8 @@ esp32/
 
 | ESP32 GPIO | 功能 | STM32 引脚 |
 |------------|------|-----------|
-| **GPIO17** | UART2 TX | PB11 (USART3 RX) |
-| **GPIO16** | UART2 RX | PB10 (USART3 TX) |
+| **GPIO 4** | UART1 TX | PB11 (USART3 RX) |
+| **GPIO 5** | UART1 RX | PB10 (USART3 TX) |
 | **GND** | 公共地 | GND |
 
 ---
@@ -197,8 +218,8 @@ pio run -e hover_ble -t upload
 ### 4.3 烧录后验证
 
 ```bash
-# 打开串口监视器（波特率 115200）
-screen /dev/ttyUSB0 115200
+# 打开串口监视器（原生 USB-CDC 常用 /dev/ttyACM0）
+screen /dev/ttyACM0 115200
 # 或使用 PlatformIO
 pio device monitor -e hover_ble
 ```
@@ -208,7 +229,8 @@ pio device monitor -e hover_ble
 ========================================
   Hoverboard ESP32 Connector v1.0
 ========================================
-[HC] UART to STM32 ready. TX=17 RX=16 Baud=115200
+[HC] UART to STM32 ready. TX=4 RX=5 Baud=115200
+[MAIN] PWM Adapter initialized on pins 6/7 (Disabled).
 [BLE] Advertising started: HoverBoard-OTA
 [MAIN] Setup complete. Waiting for connection...
 ```

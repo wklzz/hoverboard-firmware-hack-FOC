@@ -58,8 +58,8 @@ public:
         }
 
         // 2. 定期向 STM32 发送心跳包 (Protocol B)
-        // 仅在 RUNNING 状态下以 50ms 频率维持指令，防止 STM32 报警
-        if (_sm.current == SystemState::RUNNING) {
+        // 只要不是在 OTA 或 ALARM 状态，就以 50ms 频率维持指令，防止 STM32 报警
+        if (_sm.current != SystemState::OTA && _sm.current != SystemState::ALARM) {
             if (millis() - _lastHeartbeat > 50) {
                 _lastHeartbeat = millis();
                 _currentDrive.calcChecksum();
@@ -69,6 +69,8 @@ public:
     }
 
     StateMachine& stateMachine() { return _sm; }
+    std::function<void(uint8_t key, const uint8_t* payload, uint16_t len)> onConfig;
+    std::function<uint16_t(uint8_t* payload, uint16_t maxLen)> onStatusRequest;
 
 private:
     // --------------------------------------------------------
@@ -78,15 +80,15 @@ private:
         while (!_rxBuffer.empty() && _rxBuffer[0] != PKT_SOF) {
             _rxBuffer.erase(_rxBuffer.begin());
         }
-        if (_rxBuffer.size() < 6) return;
-
         uint16_t payloadLen = (uint16_t)_rxBuffer[2] | ((uint16_t)_rxBuffer[3] << 8);
         size_t frameLen = 6 + payloadLen;
 
+        // 安全性检查：Protocol A/C 帧长不应超过 MAX_PAYLOAD_LEN + 6
         if (payloadLen > MAX_PAYLOAD_LEN) {
             _rxBuffer.erase(_rxBuffer.begin());
             return;
         }
+
         if (_rxBuffer.size() < frameLen) return;
 
         uint8_t frame[6 + MAX_PAYLOAD_LEN];
@@ -115,9 +117,22 @@ private:
             case CmdId::DRIVE:
                 handleDriveCmd(&frame[4], payloadLen);
                 break;
-            default:
-                // 默认透传 (PING, ERASE, WRITE, BOOT)
+            case CmdId::PING:
+            case CmdId::INFO:
+            case CmdId::ERASE:
+            case CmdId::WRITE:
+            case CmdId::BOOT:
+                // OTA 相关指令处理
+                if (_sm.current != SystemState::OTA) {
+                    startOtaHandover();
+                    _sm.current = SystemState::OTA; // 强制进入 OTA 状态以通过 stateMachine 检查
+                }
                 Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
+                _uart.write(frame, frameLen);
+                _uart.flush();
+                break;
+            default:
+                Serial.printf("[HC] -> STM32 Unknown CMD=0x%02X len=%u\n", cmdId, payloadLen);
                 _uart.write(frame, frameLen);
                 _uart.flush();
                 break;
@@ -128,13 +143,19 @@ private:
 
     void handleStatusCmd() {
         Serial.println("[HC] Handled STATUS cmd");
-        uint8_t statusPayload = static_cast<uint8_t>(_sm.current);
-        sendResponseToAdapters(static_cast<uint8_t>(CmdId::STATUS) | ACK_MASK, &statusPayload, 1);
+        uint8_t payload[8];
+        payload[0] = static_cast<uint8_t>(_sm.current);
+        uint16_t plen = 1;
+        if (onStatusRequest) {
+            plen += onStatusRequest(&payload[1], sizeof(payload) - 1);
+        }
+        sendResponseToAdapters(static_cast<uint8_t>(CmdId::STATUS) | ACK_MASK, payload, plen);
     }
 
     void handleConfigCmd(const uint8_t* payload, uint16_t len) {
-        // 暂不实现具体配置存储，仅回复 ACK
-        Serial.printf("[HC] Handled CONFIG cmd, len=%u\n", len);
+        if (len >= 1 && onConfig) {
+            onConfig(payload[0], &payload[1], len - 1);
+        }
         sendResponseToAdapters(static_cast<uint8_t>(CmdId::CONFIG) | ACK_MASK, nullptr, 0);
     }
 
@@ -143,7 +164,14 @@ private:
         // 小端读取 steer, speed 并存入缓存，由 update() 循环发送
         _currentDrive.steer = (int16_t)(payload[0] | (payload[1] << 8));
         _currentDrive.speed = (int16_t)(payload[2] | (payload[3] << 8));
-        Serial.printf("[HC] DRIVE updated: steer=%d speed=%d\n", _currentDrive.steer, _currentDrive.speed);
+    }
+
+    void startOtaHandover() {
+        Serial.println("[HC] Handover: Sending $REBOOT to STM32...");
+        _uart.write((const uint8_t*)"$REBOOT\r\n", 9);
+        _uart.flush();
+        // 等待 STM32 完成重启并进入 Bootloader
+        delay(200);
     }
 
     void handleDisconnection() {
@@ -163,13 +191,22 @@ private:
     // 处理从 STM32 发来的数据
     // --------------------------------------------------------
     void processSTM32ProtocolA() {
-        if (_stm32RxBuffer.size() > 2) {
-            uint16_t expected = 6 + ((uint16_t)_stm32RxBuffer[2] | ((uint16_t)_stm32RxBuffer[3] << 8));
-            if (_stm32RxBuffer.size() >= expected) {
-                broadcastToAdapters(_stm32RxBuffer.data(), expected);
-                _sm.onCommandExecuted(_stm32RxBuffer[1]);
-                _stm32RxBuffer.erase(_stm32RxBuffer.begin(), _stm32RxBuffer.begin() + expected);
-            }
+        if (_stm32RxBuffer.size() < 6) return;
+        
+        uint16_t payloadLen = (uint16_t)_stm32RxBuffer[2] | ((uint16_t)_stm32RxBuffer[3] << 8);
+        uint16_t expected = 6 + payloadLen;
+
+        // 安全限制：如果长度不合理，或者超过我们的缓冲区余量，判定为噪声并丢弃 SOF
+        if (payloadLen > MAX_PAYLOAD_LEN || expected > 300) {
+            Serial.printf("[HC] Invalid Protocol A length from STM32: %u. Dropping byte.\n", payloadLen);
+            _stm32RxBuffer.erase(_stm32RxBuffer.begin());
+            return;
+        }
+
+        if (_stm32RxBuffer.size() >= expected) {
+            broadcastToAdapters(_stm32RxBuffer.data(), expected);
+            _sm.onCommandExecuted(_stm32RxBuffer[1]);
+            _stm32RxBuffer.erase(_stm32RxBuffer.begin(), _stm32RxBuffer.begin() + expected);
         }
     }
 

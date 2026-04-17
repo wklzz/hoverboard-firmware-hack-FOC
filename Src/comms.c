@@ -79,8 +79,9 @@ const command_entry commands[] = {
     {READ   ,"HELP"    ,printAllParamHelp ,printParamHelp  ,NULL           ,"Command/Parameter/Variable Help"},
     {READ   ,"WATCH"   ,NULL              ,watchParamVal   ,NULL           ,"Toggle Parameter/Variable Watch"},
     {WRITE  ,"SET"     ,NULL              ,NULL            ,setParamValExt ,"Set Parameter"},
-    {WRITE  ,"INIT"    ,NULL              ,initParamVal    ,NULL           ,"Init Parameter from EEPROM or CONFIG.H"},
+    {WRITE  ,"INIT"    ,initParamVal      ,NULL            ,NULL           ,"Init Parameter from EEPROM or CONFIG.H"},
     {WRITE  ,"SAVE"    ,saveAllParamVal   ,NULL            ,NULL           ,"Save Parameters to EEPROM"},
+    {WRITE  ,"REBOOT"  ,rebootSystem      ,NULL            ,NULL           ,"Reboot to Bootloader"},
 };
 
 enum paramTypes {PARAMETER,VARIABLE};

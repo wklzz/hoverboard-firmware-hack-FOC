@@ -2,6 +2,7 @@
 #include "IAdapter.h"
 #include "BLEAdapter.h"
 #include "WiFiAdapter.h"
+#include "PwmAdapter.h"
 
 // ============================================================
 // 适配器工厂 (Factory Pattern)
@@ -11,6 +12,7 @@
 enum class AdapterType {
     BLE,
     WIFI,
+    PWM
 };
 
 struct WiFiConfig {
@@ -30,8 +32,11 @@ public:
             case AdapterType::WIFI:
                 if (!wifiCfg.ssid) return nullptr;
                 return new WiFiAdapter(wifiCfg.ssid, wifiCfg.password, wifiCfg.port);
+            case AdapterType::PWM:
+                return new PwmAdapter();
             default:
                 return nullptr;
         }
     }
 };
+

@@ -112,6 +112,7 @@ void sideboardSensors(uint8_t sensors);
 void saveConfig(void);
 void poweroff(void);
 void poweroffPressCheck(void);
+int8_t rebootSystem(void);
 
 // Filtering Functions
 void filtLowPass32(int32_t u, uint16_t coef, int32_t *y);
