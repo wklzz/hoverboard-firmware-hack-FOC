@@ -1,0 +1,20 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/dashboard/dashboard"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#000000",
+    "navigationBarTitleText": "平衡车助手",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#121212"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "基于蓝牙设备的扫描需要位置权限"
+    }
+  },
+  "requiredBackgroundModes": ["location"],
+  "sitemapLocation": "sitemap.json"
+}

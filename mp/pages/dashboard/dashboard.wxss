@@ -1,0 +1,192 @@
+page {
+  background-color: #0a0a0a;
+  color: #ffffff;
+}
+
+.container {
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40rpx;
+}
+
+.conn-status {
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10rpx 24rpx;
+  border-radius: 100rpx;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  background: #ff4d4d;
+  border-radius: 50%;
+  margin-right: 12rpx;
+  box-shadow: 0 0 10rpx rgba(255, 77, 77, 0.5);
+}
+
+.dot.active {
+  background: #00ff88;
+  box-shadow: 0 0 10rpx rgba(0, 255, 136, 0.5);
+}
+
+.mode-tag {
+  background: linear-gradient(90deg, #3a7bd5, #00d2ff);
+  padding: 10rpx 30rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+/* 速度表盘 */
+.gauge-section {
+  display: flex;
+  justify-content: center;
+  margin: 60rpx 0;
+}
+
+.speed-gauge {
+  width: 400rpx;
+  height: 400rpx;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.gauge-bg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 20rpx solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.gauge-fill {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 20rpx solid transparent;
+  border-top-color: #00d2ff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.speed-value {
+  text-align: center;
+  z-index: 1;
+}
+
+.speed-value .num {
+  font-size: 100rpx;
+  font-weight: bold;
+  display: block;
+  font-family: 'DIN Condensed', sans-serif;
+}
+
+.speed-value .unit {
+  font-size: 24rpx;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 4rpx;
+}
+
+/* 数据网格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+  flex: 1;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20rpx;
+  padding: 30rpx;
+}
+
+.stat-card.wide {
+  grid-column: span 2;
+}
+
+.label {
+  font-size: 22rpx;
+  color: #888;
+  margin-bottom: 20rpx;
+  display: block;
+}
+
+.value-row {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 20rpx;
+}
+
+.val {
+  font-size: 48rpx;
+  font-weight: bold;
+  margin-right: 10rpx;
+}
+
+.unit {
+  font-size: 20rpx;
+  color: #444;
+}
+
+.progress-bg {
+  height: 8rpx;
+  background: #222;
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4rpx;
+  transition: width 0.5s ease;
+}
+
+.power-bars .bar-item {
+  margin-bottom: 20rpx;
+}
+
+.power-bars .bar-item text {
+  font-size: 20rpx;
+  color: #666;
+  margin-bottom: 6rpx;
+  display: block;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 40rpx;
+}
+
+.action-btn {
+  flex: 1;
+  background: #333;
+  color: #eee;
+  font-size: 28rpx;
+  border-radius: 12rpx;
+}
+
+.action-btn.danger {
+  color: #ff4d4d;
+  background: rgba(255, 77, 77, 0.1);
+}

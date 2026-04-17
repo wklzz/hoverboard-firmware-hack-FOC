@@ -1,0 +1,28 @@
+<view class="container">
+  <view class="header">
+    <text class="title">设备搜索</text>
+    <text class="subtitle">寻找您的平衡车控制器</text>
+  </view>
+
+  <scroll-view class="device-list" scroll-y>
+    <view class="device-item" wx:for="{{devices}}" wx:key="deviceId" bindtap="connectDevice" data-id="{{item.deviceId}}">
+      <view class="device-info">
+        <text class="device-name">{{item.name || '未知设备'}}</text>
+        <text class="device-id">{{item.deviceId}}</text>
+      </view>
+      <view class="rssi-box">
+        <text class="rssi">{{item.RSSI}}dBm</text>
+      </view>
+    </view>
+    
+    <view class="empty-tip" wx:if="{{devices.length === 0}}">
+      {{scanning ? '正在扫描附近设备...' : '未发现设备'}}
+    </view>
+  </scroll-view>
+
+  <view class="footer">
+    <button class="scan-btn {{scanning ? 'scanning' : ''}}" bindtap="toggleScan">
+      {{scanning ? '停止扫描' : '开始扫描'}}
+    </button>
+  </view>
+</view>
