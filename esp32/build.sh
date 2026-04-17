@@ -52,6 +52,7 @@ echo "==== 镜像构建成功 ===="
 echo ""
 echo "==== [2/3] 编译固件 (env: ${ENV_NAME}) ===="
 docker run --rm \
+    -v "pio_cache:/root/.platformio" \
     -v "$SCRIPT_DIR:/workspace" \
     "$IMAGE_NAME" \
     run -e "$ENV_NAME"
@@ -72,15 +73,16 @@ if [ "$FLASH" = true ]; then
     echo ""
     echo "==== [3/3] 烧录固件到 ESP32 ===="
 
-    # 自动检测串口
-    PORT=""
-    for p in /dev/ttyUSB0 /dev/ttyUSB1 /dev/ttyACM0 /dev/ttyACM1; do
-        if [ -e "$p" ]; then
-            PORT="$p"
-            break
-        fi
-    done
-
+    # 自动检测串口 (优先检测 ACM0，通常是原生 USB 接口；其次 USB0)
+    if [ -z "$PORT" ]; then
+        for p in /dev/ttyACM0 /dev/ttyACM1 /dev/ttyUSB0 /dev/ttyUSB1; do
+            if [ -e "$p" ]; then
+                PORT="$p"
+                break
+            fi
+        done
+    fi
+    
     if [ -z "$PORT" ]; then
         echo "==== 未找到串口设备，请手动指定 PORT 环境变量 ===="
         echo "例如: PORT=/dev/ttyUSB0 ./build.sh flash"
@@ -89,6 +91,16 @@ if [ "$FLASH" = true ]; then
 
     echo "使用串口: $PORT"
 
+    # 检查当前用户是否有权访问该端口
+    if [ ! -w "$PORT" ]; then
+        echo "==== 错误: 当前用户对于 $PORT 没有写入权限！ ===="
+        echo "这通常是因为该设备属于 'dialout' 组，但您不在该组中。"
+        echo "解决方法 (二选一):"
+        echo "  1. 运行: sudo usermod -a -G dialout $USER  (然后重启设备生效)"
+        echo "  2. 运行: sudo chmod 666 $PORT"
+        exit 1
+    fi
+
     # 主机直接烧录 (需要安装 esptool)
     if command -v esptool.py &>/dev/null; then
         esptool.py --chip esp32 --port "$PORT" --baud 921600 \
@@ -96,6 +108,7 @@ if [ "$FLASH" = true ]; then
     else
         # 回退到 pio 烧录
         docker run --rm \
+            -v "pio_cache:/root/.platformio" \
             --device="$PORT:$PORT" \
             -v "$SCRIPT_DIR:/workspace" \
             "$IMAGE_NAME" \

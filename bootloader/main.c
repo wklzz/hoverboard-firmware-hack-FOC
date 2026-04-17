@@ -34,10 +34,16 @@
 #define BUZZER_PIN GPIO_PIN_4
 #define BUZZER_PORT GPIOA
 #define BUZZER_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+#define OFF_PIN   GPIO_PIN_5
+#define OFF_PORT  GPIOA
+#define OFF_CLK_ENABLE()    __HAL_RCC_GPIOA_CLK_ENABLE()
 #elif BOARD_VARIANT == 1
 #define BUZZER_PIN GPIO_PIN_13
 #define BUZZER_PORT GPIOC
 #define BUZZER_CLK_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
+#define OFF_PIN   GPIO_PIN_15
+#define OFF_PORT  GPIOC
+#define OFF_CLK_ENABLE()    __HAL_RCC_GPIOC_CLK_ENABLE()
 #endif
 
 static UART_HandleTypeDef huart3;
@@ -235,6 +241,10 @@ int main(void) {
   HAL_Init();
   SystemClock_Config();
   GPIO_Init();
+  
+  // 即刻拉高电源维持引脚，防止松开电源键后断电
+  HAL_GPIO_WritePin(OFF_PORT, OFF_PIN, GPIO_PIN_SET);
+  
   UART3_Init();
 
   boot_print("\r\n[BL] Bootloader Ready (HSI Mode)\r\n");
@@ -244,20 +254,27 @@ int main(void) {
   uint16_t payload_len = 0;
   bool stay_in_bl = false;
 
-  while (1) {
+  int sync_retries = 20; // 约 2 秒超时 (20 * 100ms)
+  while (sync_retries-- > 0) {
     boot_print("[BL] WAITING_SYNC...\r\n");
-    beep(8, 100);
-    for (int i = 0; i < 9; i++) {
-      if (recv_packet(&cmd, payload, &payload_len, 100U)) {
-        stay_in_bl = true;
-        break;
-      }
-    }
-    if (stay_in_bl) {
-      beep(8, 500);
-      boot_print("[BL] SYNC_OK!\r\n");
+    beep(8, 50);
+    if (recv_packet(&cmd, payload, &payload_len, 100U)) {
+      stay_in_bl = true;
       break;
     }
+  }
+
+  if (!stay_in_bl) {
+    if (boot_is_app_valid()) {
+        boot_print("[BL] No Sync, Jumping to App...\r\n");
+        HAL_Delay(100);
+        boot_jump_to_app();
+    } else {
+        boot_print("[BL] No Sync and No Valid App! Staying in BL.\r\n");
+    }
+  } else {
+      beep(8, 500);
+      boot_print("[BL] SYNC_OK!\r\n");
   }
 
   while (1) {
@@ -306,15 +323,29 @@ int main(void) {
 static void GPIO_Init(void) {
   __HAL_RCC_GPIOB_CLK_ENABLE();
   BUZZER_CLK_ENABLE();
+  OFF_CLK_ENABLE();
+  
   GPIO_InitTypeDef gpio = {0};
+  
+  // Power Latch
+  gpio.Pin = OFF_PIN;
+  gpio.Mode = GPIO_MODE_OUTPUT_PP;
+  gpio.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(OFF_PORT, &gpio);
+
+  // Buzzer
   gpio.Pin = BUZZER_PIN;
   gpio.Mode = GPIO_MODE_OUTPUT_PP;
   gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(BUZZER_PORT, &gpio);
+
+  // UART3 TX
   gpio.Pin = GPIO_PIN_10;
   gpio.Mode = GPIO_MODE_AF_PP;
   gpio.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &gpio);
+
+  // UART3 RX
   gpio.Pin = GPIO_PIN_11;
   gpio.Mode = GPIO_MODE_INPUT;
   gpio.Pull = GPIO_NOPULL;

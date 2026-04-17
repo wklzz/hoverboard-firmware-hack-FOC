@@ -24,9 +24,14 @@ public:
     bool canExecute(uint8_t cmdId) {
         CmdId id = static_cast<CmdId>(cmdId & ~0x80);
 
+        // CONFIG, STATUS 不触及底层硬件，一般在非 ALARM 和非 OTA 状态下均可
+        if (id == CmdId::CONFIG || id == CmdId::STATUS) {
+            return current != SystemState::ALARM && current != SystemState::OTA;
+        }
+
         switch (current) {
             case SystemState::RUNNING:
-                // 运行中禁止 ERASE / WRITE / BOOT
+                // 运行中禁止 ERASE / WRITE / BOOT / PING (透传给Bootloader的)
                 if (id == CmdId::ERASE || id == CmdId::WRITE || id == CmdId::BOOT) {
                     Serial.println("[SM] BLOCKED: OTA cmd while RUNNING");
                     return false;
@@ -34,15 +39,19 @@ public:
                 break;
 
             case SystemState::ALARM:
-                // 故障状态只允许 PING
-                if (id != CmdId::PING) {
+                // 故障状态只允许 PING / STATUS (PC/手机获取状态)
+                if (id != CmdId::PING && id != CmdId::STATUS) {
                     Serial.println("[SM] BLOCKED: non-PING cmd while ALARM");
                     return false;
                 }
                 break;
 
             case SystemState::OTA:
-                // OTA 中不允许控制指令 (只有 ERASE / WRITE / BOOT / PING)
+                // OTA 中不允许控制指令 (在此处屏蔽 DRIVE)
+                if (id == CmdId::DRIVE) {
+                    Serial.println("[SM] BLOCKED: DRIVE cmd while OTA");
+                    return false;
+                }
                 break;
 
             default:
@@ -67,6 +76,12 @@ public:
                 if (current == SystemState::IDLE) {
                     current = SystemState::CONNECTED;
                     Serial.println("[SM] -> CONNECTED");
+                }
+                break;
+            case CmdId::DRIVE:
+                if (current == SystemState::CONNECTED || current == SystemState::IDLE) {
+                    current = SystemState::RUNNING;
+                    Serial.println("[SM] -> RUNNING");
                 }
                 break;
             default:

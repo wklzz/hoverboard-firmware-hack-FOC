@@ -19,6 +19,10 @@ public:
     // 关闭通道
     virtual void stop() = 0;
 
-    // 物理层收到数据时触发 (上层绑定)
+    // 循环处理业务逻辑 (应在 loop() 中被调用)
+    virtual void handle() = 0;
+
+    // 物理层收到数据/断开时触发 (上层绑定)
     std::function<void(const uint8_t*, size_t)> onRawData;
+    std::function<void()>                       onConnectionLost;
 };

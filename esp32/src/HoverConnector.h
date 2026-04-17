@@ -10,59 +10,60 @@
 // HoverConnector — 核心协调层
 //
 // 职责：
-//  1. 接收来自适配器（BLE/WiFi）的原始字节
-//  2. 解析二进制数据包
-//  3. 经状态机安全预检
-//  4. 将合法指令通过硬件串口转发给 STM32 Bootloader
-//  5. 将 STM32 的响应回传给原始适配器
+//  1. 接收来自适配器的原始字节，解析 Protocol C 帧
+//  2. 处理 ESP32 本地指令 (CONFIG, STATUS)
+//  3. 将控制指令 (DRIVE) 转换为 Protocol B 后发送给 STM32
+//  4. 将透传指令 (OTA 等) 直接发送给 STM32
+//  5. 接收 STM32 串口数据，区分 OTA 回包与 Protocol B 回包
+//  6. 封装为 Protocol C 回传给适配器
 // ============================================================
 
 class HoverConnector {
 public:
-    // uart: 连接 STM32 的硬件串口 (如 Serial2)
-    // txPin/rxPin: 对应 GPIO 引脚
     HoverConnector(HardwareSerial& uart, int txPin, int rxPin, uint32_t baud = 115200)
         : _uart(uart), _txPin(txPin), _rxPin(rxPin), _baud(baud) {}
 
-    // 注册适配器（支持多个，互相独立）
     void addAdapter(IAdapter* adapter) {
         adapter->onRawData = [this](const uint8_t* data, size_t len) {
             _rxBuffer.insert(_rxBuffer.end(), data, data + len);
             processBuffer();
         };
+        adapter->onConnectionLost = [this]() {
+            handleDisconnection();
+        };
         _adapters.push_back(adapter);
         adapter->init();
     }
 
-    // 必须在 setup() 中调用
     void begin() {
         _uart.begin(_baud, SERIAL_8N1, _rxPin, _txPin);
         Serial.printf("[HC] UART to STM32 ready. TX=%d RX=%d Baud=%lu\n",
                       _txPin, _rxPin, _baud);
     }
 
-    // 必须在 loop() 中调用 — 转发 STM32 回包给适配器
     void update() {
-        _stm32RxBuffer.clear();
-        // 以非阻塞方式读取 STM32 回包 (最多等 200ms)
-        uint32_t start = millis();
-        while (millis() - start < 200) {
-            if (_uart.available()) {
-                uint8_t b = _uart.read();
-                _stm32RxBuffer.push_back(b);
-                // 帧结束判断: 最简方式是在收到 SOF 后的一帧
-                if (_stm32RxBuffer.size() > 2) {
-                    uint16_t expected = 6 + ((uint16_t)_stm32RxBuffer[2] | ((uint16_t)_stm32RxBuffer[3] << 8));
-                    if (_stm32RxBuffer.size() >= expected) break;
-                }
-            }
+        // 1. 读取 STM32 返回的串口数据
+        while (_uart.available()) {
+            uint8_t b = _uart.read();
+            _stm32RxBuffer.push_back(b);
         }
 
         if (!_stm32RxBuffer.empty()) {
-            broadcastToAdapters(_stm32RxBuffer.data(), _stm32RxBuffer.size());
-            // 状态机后处理
-            if (_stm32RxBuffer.size() >= 2) {
-                _sm.onCommandExecuted(_stm32RxBuffer[1]);
+            // 判断是 Protocol A 的回包 还是 Protocol B 的 Telemetry 包
+            if (_stm32RxBuffer[0] == PKT_SOF) {
+                processSTM32ProtocolA();
+            } else {
+                processSTM32ProtocolB();
+            }
+        }
+
+        // 2. 定期向 STM32 发送心跳包 (Protocol B)
+        // 仅在 RUNNING 状态下以 50ms 频率维持指令，防止 STM32 报警
+        if (_sm.current == SystemState::RUNNING) {
+            if (millis() - _lastHeartbeat > 50) {
+                _lastHeartbeat = millis();
+                _currentDrive.calcChecksum();
+                _uart.write((uint8_t*)&_currentDrive, sizeof(RuntimeCmd));
             }
         }
     }
@@ -70,30 +71,28 @@ public:
     StateMachine& stateMachine() { return _sm; }
 
 private:
-    // 尝试从接收缓冲区解析出一个完整帧并转发
+    // --------------------------------------------------------
+    // 从手机侧接收数据并处理
+    // --------------------------------------------------------
     void processBuffer() {
-        // 找 SOF
         while (!_rxBuffer.empty() && _rxBuffer[0] != PKT_SOF) {
             _rxBuffer.erase(_rxBuffer.begin());
         }
-        if (_rxBuffer.size() < 6) return; // 帧最短 6 字节
+        if (_rxBuffer.size() < 6) return;
 
         uint16_t payloadLen = (uint16_t)_rxBuffer[2] | ((uint16_t)_rxBuffer[3] << 8);
         size_t frameLen = 6 + payloadLen;
 
         if (payloadLen > MAX_PAYLOAD_LEN) {
-            // 数据异常，丢弃一个字节重找帧头
             _rxBuffer.erase(_rxBuffer.begin());
             return;
         }
-        if (_rxBuffer.size() < frameLen) return; // 等更多数据
+        if (_rxBuffer.size() < frameLen) return;
 
-        // 提取帧
         uint8_t frame[6 + MAX_PAYLOAD_LEN];
         memcpy(frame, _rxBuffer.data(), frameLen);
         _rxBuffer.erase(_rxBuffer.begin(), _rxBuffer.begin() + frameLen);
 
-        // CRC 校验 (覆盖 CMD + LEN + Payload)
         uint16_t calc = crc16_ccitt(&frame[1], 3 + payloadLen);
         uint16_t recv = (uint16_t)frame[4 + payloadLen] | ((uint16_t)frame[5 + payloadLen] << 8);
         if (calc != recv) {
@@ -102,14 +101,115 @@ private:
         }
 
         uint8_t cmdId = frame[1];
-
-        // 状态机预检
         if (!_sm.canExecute(cmdId)) return;
 
-        // 转发至 STM32
-        Serial.printf("[HC] -> STM32 CMD=0x%02X len=%u\n", cmdId, payloadLen);
-        _uart.write(frame, frameLen);
-        _uart.flush();
+        // 根据 Protocol C 进行指令路由
+        CmdId id = static_cast<CmdId>(cmdId & ~0x80);
+        switch (id) {
+            case CmdId::STATUS:
+                handleStatusCmd();
+                break;
+            case CmdId::CONFIG:
+                handleConfigCmd(&frame[4], payloadLen);
+                break;
+            case CmdId::DRIVE:
+                handleDriveCmd(&frame[4], payloadLen);
+                break;
+            default:
+                // 默认透传 (PING, ERASE, WRITE, BOOT)
+                Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
+                _uart.write(frame, frameLen);
+                _uart.flush();
+                break;
+        }
+
+        _sm.onCommandExecuted(cmdId);
+    }
+
+    void handleStatusCmd() {
+        Serial.println("[HC] Handled STATUS cmd");
+        uint8_t statusPayload = static_cast<uint8_t>(_sm.current);
+        sendResponseToAdapters(static_cast<uint8_t>(CmdId::STATUS) | ACK_MASK, &statusPayload, 1);
+    }
+
+    void handleConfigCmd(const uint8_t* payload, uint16_t len) {
+        // 暂不实现具体配置存储，仅回复 ACK
+        Serial.printf("[HC] Handled CONFIG cmd, len=%u\n", len);
+        sendResponseToAdapters(static_cast<uint8_t>(CmdId::CONFIG) | ACK_MASK, nullptr, 0);
+    }
+
+    void handleDriveCmd(const uint8_t* payload, uint16_t len) {
+        if (len < 4) return;
+        // 小端读取 steer, speed 并存入缓存，由 update() 循环发送
+        _currentDrive.steer = (int16_t)(payload[0] | (payload[1] << 8));
+        _currentDrive.speed = (int16_t)(payload[2] | (payload[3] << 8));
+        Serial.printf("[HC] DRIVE updated: steer=%d speed=%d\n", _currentDrive.steer, _currentDrive.speed);
+    }
+
+    void handleDisconnection() {
+        Serial.println("[HC] Connection lost!");
+        if (_sm.current == SystemState::RUNNING) {
+            Serial.println("[HC] SAFETY STOP: Sending zero drive to STM32");
+            RuntimeCmd stopCmd;
+            stopCmd.steer = 0;
+            stopCmd.speed = 0;
+            stopCmd.calcChecksum();
+            _uart.write((uint8_t*)&stopCmd, sizeof(RuntimeCmd));
+        }
+        _sm.reset();
+    }
+
+    // --------------------------------------------------------
+    // 处理从 STM32 发来的数据
+    // --------------------------------------------------------
+    void processSTM32ProtocolA() {
+        if (_stm32RxBuffer.size() > 2) {
+            uint16_t expected = 6 + ((uint16_t)_stm32RxBuffer[2] | ((uint16_t)_stm32RxBuffer[3] << 8));
+            if (_stm32RxBuffer.size() >= expected) {
+                broadcastToAdapters(_stm32RxBuffer.data(), expected);
+                _sm.onCommandExecuted(_stm32RxBuffer[1]);
+                _stm32RxBuffer.erase(_stm32RxBuffer.begin(), _stm32RxBuffer.begin() + expected);
+            }
+        }
+    }
+
+    void processSTM32ProtocolB() {
+        // 清理缓存开头不是 0xCD 0xAB (即开始为 0xABCD, 第一个字节为 0xCD, 第二个字节为 0xAB) 的部分
+        while (_stm32RxBuffer.size() >= 2) {
+            if (_stm32RxBuffer[0] == 0xCD && _stm32RxBuffer[1] == 0xAB) break;
+            // 处理只有一个字节的情况
+            if (_stm32RxBuffer[0] == PKT_SOF) return; // 回到 Protocol A
+
+            _stm32RxBuffer.erase(_stm32RxBuffer.begin());
+        }
+
+        // 需要 18 字节
+        if (_stm32RxBuffer.size() >= sizeof(RuntimeFeedback)) {
+            RuntimeFeedback fb;
+            memcpy(&fb, _stm32RxBuffer.data(), sizeof(RuntimeFeedback));
+            if (fb.isValid()) {
+                // 封装为 TELEMETRY 包发给手机
+                // Payload 为除了 start 和 checksum 之外的 14 个字节
+                uint8_t payload[14];
+                memcpy(payload, &fb.cmd1, 14);
+                
+                sendResponseToAdapters(static_cast<uint8_t>(CmdId::TELEMETRY), payload, 14);
+            } else {
+                Serial.println("[HC] Protocol B checksum err!");
+            }
+            _stm32RxBuffer.erase(_stm32RxBuffer.begin(), _stm32RxBuffer.begin() + sizeof(RuntimeFeedback));
+        }
+    }
+
+    // --------------------------------------------------------
+    // 发送工具
+    // --------------------------------------------------------
+    void sendResponseToAdapters(uint8_t cmd, const uint8_t* payload, uint16_t len) {
+        uint8_t frame[6 + MAX_PAYLOAD_LEN];
+        size_t frameLen = build_frame(cmd, payload, len, frame, sizeof(frame));
+        if (frameLen > 0) {
+            broadcastToAdapters(frame, frameLen);
+        }
     }
 
     void broadcastToAdapters(const uint8_t* data, size_t len) {
@@ -118,6 +218,8 @@ private:
         }
     }
 
+    uint32_t                _lastHeartbeat = 0;
+    RuntimeCmd              _currentDrive;
     HardwareSerial&         _uart;
     int                     _txPin, _rxPin;
     uint32_t                _baud;

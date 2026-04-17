@@ -3,17 +3,13 @@
  * ============================
  * 通过 BLE (Nordic UART Service) 或 WiFi (HTTP) 接收指令和固件，
  * 经安全状态机过滤后通过 UART 转发给 STM32 Bootloader/主固件。
- *
- * 硬件接线:
- *   ESP32 GPIO17 (TX2) -> STM32 PB11 (USART3 RX)
- *   ESP32 GPIO16 (RX2) -> STM32 PB10 (USART3 TX)
- *   公共 GND 必须连接
  */
 
 #include <Arduino.h>
 #include "AdapterFactory.h"
 #include "HoverConnector.h"
 #include "WiFiAdapter.h"
+#include "SerialAdapter.h"
 
 // ============================================================
 // ⚙️ 用户配置区 — 按实际情况修改
@@ -26,16 +22,19 @@
 #define WIFI_PASSWORD     "YourPassword"
 #define WIFI_PORT         80
 
-// STM32 连接引脚 (ESP32 UART2)
+// STM32 连接引脚 (ESP32-S3 UART1/2, 使用 GPIO 17/16 匹配 README)
 #define STM32_TX_PIN      17      // ESP32 TX -> STM32 RX (PB11)
 #define STM32_RX_PIN      16      // ESP32 RX -> STM32 TX (PB10)
 #define STM32_BAUD        115200
 // ============================================================
 
 HoverConnector connector(Serial2, STM32_TX_PIN, STM32_RX_PIN, STM32_BAUD);
+SerialAdapter  serialAdapter(Serial);
+
+IAdapter*      mainAdapter = nullptr;
 
 #if ADAPTER_MODE == 1
-WiFiAdapter* wifiAdapter = nullptr;
+WiFiAdapter*   wifiAdapter = nullptr;
 #endif
 
 void setup() {
@@ -49,20 +48,24 @@ void setup() {
     // 初始化 STM32 UART
     connector.begin();
 
+    // 始终开启串口控制（用于本地测试/调试）
+    connector.addAdapter(&serialAdapter);
+
     // 通过工厂创建适配器
 #if ADAPTER_MODE == 0
     Serial.println("[MAIN] Mode: BLE");
-    IAdapter* adapter = AdapterFactory::create(AdapterType::BLE, BLE_DEVICE_NAME);
-    if (!adapter) {
+    mainAdapter = AdapterFactory::create(AdapterType::BLE, BLE_DEVICE_NAME);
+    if (!mainAdapter) {
         Serial.println("[MAIN] ERROR: BLE adapter creation failed!");
         while (1) delay(1000);
     }
-    connector.addAdapter(adapter);
+    connector.addAdapter(mainAdapter);
 
 #else
     Serial.println("[MAIN] Mode: WiFi");
     WiFiConfig cfg = { WIFI_SSID, WIFI_PASSWORD, WIFI_PORT };
     wifiAdapter = static_cast<WiFiAdapter*>(AdapterFactory::create(AdapterType::WIFI, nullptr, cfg));
+    mainAdapter = wifiAdapter;
     if (!wifiAdapter) {
         Serial.println("[MAIN] ERROR: WiFi adapter creation failed!");
         while (1) delay(1000);
@@ -77,10 +80,13 @@ void loop() {
     // 处理 STM32 的回包并转发给适配器
     connector.update();
 
-#if ADAPTER_MODE == 1
-    // WiFi 适配器需要在 loop() 中处理 HTTP 请求
-    if (wifiAdapter) wifiAdapter->handle();
-#endif
+    // 处理来自 USB 串口的消息 (始终存在的本地通道)
+    serialAdapter.handle();
+
+    // 处理主要适配器 (BLE 或 WiFi)
+    if (mainAdapter) {
+        mainAdapter->handle();
+    }
 
     // 定期打印系统状态 (每 5 秒)
     static uint32_t lastPrint = 0;
