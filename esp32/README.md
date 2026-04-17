@@ -21,23 +21,81 @@ STM32 Bootloader (PB10/PB11)
   └── CMD_ERASE → CMD_WRITE → CMD_BOOT → 主固件
 ```
 
-### 通讯协议（与 STM32 Bootloader 完全对齐）
+### 协议类型 A — STM32 Bootloader 协议 (OTA 模式)
+
+此协议仅在进入 Bootloader 模式（主板开机前 1 秒或按下特定组合键）时有效，用于固件擦写。
 
 | 偏移 | 字段 | 长度 | 说明 |
 |------|------|------|------|
 | 0 | SOF | 1 B | 固定 `0x7E` |
-| 1 | CMD | 1 B | 指令 ID（见下表）|
+| 1 | CMD | 1 B | 指令 ID |
 | 2-3 | LEN | 2 B LE | Payload 长度 |
 | 4-N | Payload | N B | 业务数据 |
-| N+1-N+2 | CRC16 | 2 B LE | CRC16-CCITT（覆盖 CMD+LEN+Payload）|
+| N+1-N+2 | CRC16 | 2 B LE | CRC16-CCITT |
 
-| CMD | 说明 |
-|-----|------|
-| `0x01` PING | 握手心跳 |
-| `0x02` INFO | 获取 Flash 布局 |
-| `0x03` ERASE | 擦除 App 区 |
-| `0x04` WRITE | 写入 Flash 块 |
-| `0x05` BOOT | 跳转到 App |
+---
+
+### 协议类型 B — 实时控制协议 (Runtime 模式)
+
+一旦主固件正常启动，ESP32 必须切换到此协议以实现电机控制和数据监控。
+
+#### 1. 控制指令 (ESP32 -> STM32)
+- **频率**: 建议 10ms - 50ms 一次（超时 800ms 会报警）
+- **格式**: 8 字节二进制包
+
+| 偏移 | 字段 | 类型 | 说明 |
+| :--- | :--- | :--- | :--- |
+| 0-1 | **start** | `uint16_t` | 固定 `0xABCD` (小端: `CD AB`) |
+| 2-3 | **steer** | `int16_t`  | 转向值 (-1000 ~ 1000) |
+| 4-5 | **speed** | `int16_t`  | 速度值 (-1000 ~ 1000) |
+| 6-7 | **checksum** | `uint16_t` | `start ^ steer ^ speed` |
+
+#### 2. 数据回传 (STM32 -> ESP32)
+- **格式**: 18 字节二进制包
+
+| 偏移 | 字段 | 类型 | 说明 |
+| :--- | :--- | :--- | :--- |
+| 0-1 | **start** | `uint16_t` | 固定 `0xABCD` |
+| 2-13 | **Data** | `int16_t[6]` | cmd1, cmd2, speedR, speedL, batV, temp |
+| 14-15 | **led** | `uint16_t` | LED 状态 |
+| 16-17 | **checksum** | `uint16_t` | 所有前续字段异或结果 |
+
+### 协议类型 C — 手机/电脑通讯协议 (Unified Protocol)
+
+为了简化客户端（小程序/App/PC）开发并增强安全性，手机/电脑与 ESP32 之间采用**统一帧格式**。该协议在结构上与“协议类型 A”完全对齐，支持在所有模式（OTA/Runtime）下使用，最大化代码复用。
+
+#### 1. 统一帧结构
+
+| 偏移 | 字段 | 长度 | 说明 |
+|------|------|------|------|
+| 0 | **SOF** | 1 B | 固定 `0x7E` |
+| 1 | **CMD** | 1 B | 指令 ID (见下表) |
+| 2-3 | **LEN** | 2 B LE | Payload 长度 (小端) |
+| 4-N | **Payload** | N B | 业务数据 |
+| N+1-N+2 | **CRC16** | 2 B LE | CRC16-CCITT (覆盖 CMD+LEN+Payload) |
+
+#### 2. 指令定义 (CMD)
+
+| CMD ID | 名称 | 功能说明 | Payload 格式 |
+| :--- | :--- | :--- | :--- |
+| **0x01-0x05** | **System** | 透传给 STM32 (PING, ERASE, WRITE, etc.) | 同协议 A |
+| **0x10** | **DRIVE** | 实时电机控制指令 (路由至协议 B) | `steer(int16)`, `speed(int16)` |
+| **0x20** | **CONFIG** | 设置 ESP32 本身参数 (如 WiFi SSID/密码) | `key(1B)`, `value(NB)` |
+| **0x8x** | **ACK** | 指令成功响应 (CMD \| 0x80) | 见各组件定义 |
+| **0x90** | **TELEMETRY**| 定时回传传感器数据 (由协议 B 封装) | 见下方说明 |
+
+#### 3. Telemetry 数据格式 (CMD=0x90)
+
+ESP32 将 STM32 回传的 18 字节原始包解析并封装在 0x90 指令的 Payload 中回传给手机。
+- **Payload 长度**: 14 字节
+- **内容**: `cmd1(int16), cmd2(int16), speedR(int16), speedL(int16), batV(int16), temp(int16), led(uint16)`
+
+#### 4. 开发优势
+- **代码复用**: ESP32 内部可直接复用 `protocol.h` 中的 `Packet` 结构体和 `crc16_ccitt()` 函数。
+- **逻辑解耦**: 客户端只需维护一套 `0x7E` 协议栈，即可兼容升级与实时控制。
+- **安全隔离**: 所有指令经由 ESP32 `StateMachine.h` 过滤，避免在运行中误触发 OTA 擦除。
+
+---
 
 ### 安全状态机
 
