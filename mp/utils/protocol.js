@@ -15,6 +15,8 @@ export const CmdId = {
   DRIVE: 0x10,
   STATUS: 0x11,
   CONFIG: 0x20,
+  AUTH_REQ: 0x30,
+  AUTH_RES: 0x31,
   TELEMETRY: 0x90
 };
 
@@ -69,7 +71,9 @@ export function buildFrame(cmd, payload = new Uint8Array(0)) {
  */
 export function parseTelemetry(payload) {
   if (payload.byteLength < 14) return null;
-  const view = new DataView(payload);
+  const view = (payload instanceof ArrayBuffer) 
+    ? new DataView(payload) 
+    : new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   return {
     cmd1: view.getInt16(0, true),
     cmd2: view.getInt16(2, true),
@@ -80,4 +84,22 @@ export function parseTelemetry(payload) {
     led: view.getUint16(12, true),
     timestamp: Date.now()
   };
+}
+
+/**
+ * Validate a received frame
+ * @param {Uint8Array} bytes 
+ * @returns {boolean}
+ */
+export function validateFrame(bytes) {
+  if (bytes.length < 6) return false;
+  if (bytes[0] !== PKT_SOF) return false;
+  
+  const plen = bytes[2] | (bytes[3] << 8);
+  if (bytes.length < 6 + plen) return false;
+  
+  const calcCrc = crc16_ccitt(bytes.subarray(1, 4 + plen));
+  const recvCrc = bytes[4 + plen] | (bytes[5 + plen] << 8);
+  
+  return calcCrc === recvCrc;
 }

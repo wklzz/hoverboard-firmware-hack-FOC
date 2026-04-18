@@ -42,11 +42,18 @@ page {
 }
 
 .mode-tag {
-  background: linear-gradient(90deg, #3a7bd5, #00d2ff);
+  background: rgba(0, 210, 255, 0.1);
   padding: 10rpx 30rpx;
   border-radius: 12rpx;
   font-size: 24rpx;
   font-weight: bold;
+  color: #00d2ff;
+  transition: all 0.3s;
+}
+ 
+.mode-tag.remote {
+  background: rgba(255, 170, 0, 0.1);
+  color: #ffaa00;
 }
 
 /* 速度表盘 */

@@ -1,7 +1,8 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/dashboard/dashboard"
+    "pages/dashboard/dashboard",
+    "pages/joystick/joystick"
   ],
   "window": {
     "backgroundTextStyle": "light",

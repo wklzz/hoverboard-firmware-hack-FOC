@@ -4,8 +4,8 @@
       <view class="dot {{connected ? 'active' : ''}}"></view>
       <text>{{connected ? '已连接' : '已断开'}}</text>
     </view>
-    <view class="mode-tag" bindtap="toggleMode">
-      模式: {{mode === 0 ? '手控' : '遥控'}}
+    <view class="mode-tag {{mode === 1 ? 'remote' : ''}}" bindtap="toggleMode">
+      模式: {{mode === 0 ? '蓝牙控制' : '遥控模式'}}
     </view>
   </view>
 
@@ -61,6 +61,7 @@
   </view>
 
   <view class="footer-actions">
+    <button wx:if="{{mode === 0}}" class="action-btn primary" bindtap="enterJoystick">摇杆控制</button>
     <button class="action-btn" bindtap="sendPing">测试通讯</button>
     <button class="action-btn danger" bindtap="disconnect">断开连接</button>
   </view>

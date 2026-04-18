@@ -1,5 +1,5 @@
 import { bleManager } from '../../utils/ble';
-import { CmdId, buildFrame, parseTelemetry } from '../../utils/protocol';
+import { CmdId, buildFrame, parseTelemetry, validateFrame } from '../../utils/protocol';
 
 Page({
   data: {
@@ -28,14 +28,36 @@ Page({
 
   initBleDataHandler() {
     bleManager.onDataCallback = (buffer) => {
-      // 简单字节包拼装逻辑（针对小报文）
-      const bytes = new Uint8Array(buffer);
-      if (bytes[0] === 0x7E && bytes[1] === 0x90) { // Telemetry
-        this.handleTelemetry(buffer.slice(4, buffer.byteLength - 2));
-      } else if (bytes[1] === (CmdId.STATUS | 0x80)) { // Status ACK
-        const view = new DataView(buffer);
-        const mode = view.getUint8(5); // [7E][91][LEN][MODE]...
-        this.setData({ mode });
+      let bytes = new Uint8Array(buffer);
+      
+      // Handle potential multiple frames in one buffer
+      while (bytes.length >= 6) {
+        if (!validateFrame(bytes)) {
+          // If not a valid frame, skip one byte and try again to find SOF
+          bytes = bytes.subarray(1);
+          continue;
+        }
+
+        const plen = bytes[2] | (bytes[3] << 8);
+        const frameLen = 6 + plen;
+        const frame = bytes.subarray(0, frameLen);
+        const cmdId = frame[1];
+
+        if (cmdId === CmdId.TELEMETRY) {
+          this.handleTelemetry(frame.slice(4, frameLen - 2));
+        } else if (cmdId === (CmdId.STATUS | 0x80)) {
+          const view = new DataView(frame.buffer, frame.byteOffset, frameLen);
+          const state = view.getUint8(4);
+          const mode = view.getUint8(5);
+          console.log(`[Dashboard] STATUS ACK received - State: ${state}, Mode: ${mode}`);
+          this.setData({ mode });
+        } else if (cmdId === (CmdId.CONFIG | 0x80)) {
+          console.log('[Dashboard] CONFIG ACK received, requesting latest status...');
+          this.requestStatus();
+        }
+
+        // Move to next frame in buffer
+        bytes = bytes.subarray(frameLen);
       }
     };
   },
@@ -69,7 +91,12 @@ Page({
   },
 
   toggleMode() {
+    if (this.switching) return;
+    this.switching = true;
+    setTimeout(() => { this.switching = false; }, 800);
+
     const newMode = this.data.mode === 0 ? 1 : 0;
+    console.log(`[Dashboard] Toggle Mode triggered, setting mode to: ${newMode}`);
     // 发送 CONFIG (0x20), key=1, val=newMode
     const payload = new Uint8Array([1, newMode]);
     const frame = buildFrame(CmdId.CONFIG, payload);
@@ -77,7 +104,18 @@ Page({
     
     // 乐观更新
     this.setData({ mode: newMode });
-    wx.showToast({ title: `切换至${newMode === 0 ? '手控' : '遥控'}任务`, icon: 'none' });
+    wx.showToast({ title: `切换指令已发送 (${newMode === 0 ? '手控' : '遥控'})`, icon: 'none' });
+
+    // 如果切换到手控模式，自动跳转到摇杆页面
+    if (newMode === 0) {
+      setTimeout(() => {
+        wx.navigateTo({ url: '/pages/joystick/joystick' });
+      }, 500);
+    }
+  },
+
+  enterJoystick() {
+    wx.navigateTo({ url: '/pages/joystick/joystick' });
   },
 
   requestStatus() {

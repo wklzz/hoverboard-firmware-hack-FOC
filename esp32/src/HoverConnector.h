@@ -77,68 +77,82 @@ private:
     // 从手机侧接收数据并处理
     // --------------------------------------------------------
     void processBuffer() {
-        while (!_rxBuffer.empty() && _rxBuffer[0] != PKT_SOF) {
-            _rxBuffer.erase(_rxBuffer.begin());
+        // 使用 while 循环排空缓冲区，处理多帧堆积
+        while (_rxBuffer.size() >= 6) {
+            // 1. 查找 SOF (0x7E)
+            if (_rxBuffer[0] != PKT_SOF) {
+                _rxBuffer.erase(_rxBuffer.begin());
+                continue;
+            }
+
+            // 2. 解析长度 (小端)
+            uint16_t payloadLen = (uint16_t)_rxBuffer[2] | ((uint16_t)_rxBuffer[3] << 8);
+            if (payloadLen > MAX_PAYLOAD_LEN) {
+                // 非法长度，丢弃该 SOF 寻找下一个
+                _rxBuffer.erase(_rxBuffer.begin());
+                continue;
+            }
+
+            size_t frameLen = 6 + payloadLen;
+            if (_rxBuffer.size() < frameLen) {
+                // 帧数据未收全，保留在缓冲区等待后续字节
+                break;
+            }
+
+            // 3. 提取完整帧并立即从缓冲区移除，防止解析失败导致死循环
+            uint8_t frame[6 + MAX_PAYLOAD_LEN];
+            memcpy(frame, _rxBuffer.data(), frameLen);
+            _rxBuffer.erase(_rxBuffer.begin(), _rxBuffer.begin() + frameLen);
+
+            // 4. 校验 CRC16-CCITT
+            uint16_t calc = crc16_ccitt(&frame[1], 3 + payloadLen);
+            uint16_t recv = (uint16_t)frame[4 + payloadLen] | ((uint16_t)frame[5 + payloadLen] << 8);
+            if (calc != recv) {
+                Serial.printf("[HC] CRC error: calc=0x%04X recv=0x%04X\n", calc, recv);
+                continue;
+            }
+
+            // 5. 状态机安全性检查
+            uint8_t cmdId = frame[1];
+            if (!_sm.canExecute(cmdId)) {
+                Serial.printf("[HC] StateMachine BLOCKED CMD: 0x%02X\n", cmdId);
+                continue;
+            }
+
+            // 6. 根据 Protocol C 进行指令路由
+            CmdId id = static_cast<CmdId>(cmdId & ~0x80);
+            switch (id) {
+                case CmdId::STATUS:
+                    handleStatusCmd();
+                    break;
+                case CmdId::CONFIG:
+                    handleConfigCmd(&frame[4], payloadLen);
+                    break;
+                case CmdId::DRIVE:
+                    handleDriveCmd(&frame[4], payloadLen);
+                    break;
+                case CmdId::PING:
+                case CmdId::INFO:
+                case CmdId::ERASE:
+                case CmdId::WRITE:
+                case CmdId::BOOT:
+                    // OTA 相关指令处理
+                    if (_sm.current != SystemState::OTA) {
+                        startOtaHandover();
+                        _sm.current = SystemState::OTA; 
+                    }
+                    Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
+                    _uart.write(frame, frameLen);
+                    _uart.flush();
+                    break;
+                default:
+                    Serial.printf("[HC] -> STM32 Unknown CMD=0x%02X len=%u\n", cmdId, payloadLen);
+                    _uart.write(frame, frameLen);
+                    _uart.flush();
+                    break;
+            }
+            _sm.onCommandExecuted(cmdId);
         }
-        uint16_t payloadLen = (uint16_t)_rxBuffer[2] | ((uint16_t)_rxBuffer[3] << 8);
-        size_t frameLen = 6 + payloadLen;
-
-        // 安全性检查：Protocol A/C 帧长不应超过 MAX_PAYLOAD_LEN + 6
-        if (payloadLen > MAX_PAYLOAD_LEN) {
-            _rxBuffer.erase(_rxBuffer.begin());
-            return;
-        }
-
-        if (_rxBuffer.size() < frameLen) return;
-
-        uint8_t frame[6 + MAX_PAYLOAD_LEN];
-        memcpy(frame, _rxBuffer.data(), frameLen);
-        _rxBuffer.erase(_rxBuffer.begin(), _rxBuffer.begin() + frameLen);
-
-        uint16_t calc = crc16_ccitt(&frame[1], 3 + payloadLen);
-        uint16_t recv = (uint16_t)frame[4 + payloadLen] | ((uint16_t)frame[5 + payloadLen] << 8);
-        if (calc != recv) {
-            Serial.printf("[HC] CRC error: calc=0x%04X recv=0x%04X\n", calc, recv);
-            return;
-        }
-
-        uint8_t cmdId = frame[1];
-        if (!_sm.canExecute(cmdId)) return;
-
-        // 根据 Protocol C 进行指令路由
-        CmdId id = static_cast<CmdId>(cmdId & ~0x80);
-        switch (id) {
-            case CmdId::STATUS:
-                handleStatusCmd();
-                break;
-            case CmdId::CONFIG:
-                handleConfigCmd(&frame[4], payloadLen);
-                break;
-            case CmdId::DRIVE:
-                handleDriveCmd(&frame[4], payloadLen);
-                break;
-            case CmdId::PING:
-            case CmdId::INFO:
-            case CmdId::ERASE:
-            case CmdId::WRITE:
-            case CmdId::BOOT:
-                // OTA 相关指令处理
-                if (_sm.current != SystemState::OTA) {
-                    startOtaHandover();
-                    _sm.current = SystemState::OTA; // 强制进入 OTA 状态以通过 stateMachine 检查
-                }
-                Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
-                _uart.write(frame, frameLen);
-                _uart.flush();
-                break;
-            default:
-                Serial.printf("[HC] -> STM32 Unknown CMD=0x%02X len=%u\n", cmdId, payloadLen);
-                _uart.write(frame, frameLen);
-                _uart.flush();
-                break;
-        }
-
-        _sm.onCommandExecuted(cmdId);
     }
 
     void handleStatusCmd() {

@@ -1,0 +1,146 @@
+.container {
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, #1a1a2e, #16213e, #0f3460);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  padding: 30rpx;
+  border-radius: 30rpx;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 60rpx;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-item .label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 8rpx;
+}
+
+.stat-item .val {
+  font-size: 32rpx;
+  font-weight: bold;
+  font-family: 'Outfit', sans-serif;
+  color: #00ff88;
+}
+
+/* Joystick Area */
+.joystick-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-container {
+  width: 400rpx;
+  height: 400rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-bg {
+  width: 360rpx;
+  height: 360rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  border: 4px solid rgba(0, 210, 255, 0.2);
+  box-shadow: 0 0 60rpx rgba(0, 210, 255, 0.1);
+}
+
+.joystick-stick {
+  width: 140rpx;
+  height: 140rpx;
+  background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+  border-radius: 50%;
+  position: absolute;
+  box-shadow: 0 10rpx 40rpx rgba(0, 210, 255, 0.5);
+  z-index: 10;
+  border: 4rpx solid rgba(255, 255, 255, 0.3);
+}
+
+.axis-debug {
+  margin-top: 60rpx;
+  display: flex;
+  gap: 40rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 30rpx;
+  margin-top: 40rpx;
+}
+
+.actions button {
+  flex: 1;
+  border-radius: 60rpx;
+  font-size: 28rpx;
+  padding: 24rpx 0;
+  border: none;
+}
+
+.stop-btn {
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  color: white;
+  box-shadow: 0 10rpx 30rpx rgba(255, 75, 43, 0.3);
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+ 
+/* Speed Control */
+.speed-control {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 30rpx;
+  border-radius: 30rpx;
+  margin: 40rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+ 
+.speed-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+ 
+.speed-info .label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+ 
+.speed-info .val {
+  font-size: 24rpx;
+  color: #00d2ff;
+  font-weight: bold;
+}
+ 
+.speed-slider {
+  margin: 0;
+  padding: 0;
+}

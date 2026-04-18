@@ -1,7 +1,8 @@
 {
   "description": "项目配置文件",
   "packOptions": {
-    "ignore": []
+    "ignore": [],
+    "include": []
   },
   "setting": {
     "urlCheck": false,
@@ -38,15 +39,21 @@
     "minifyWXSS": true,
     "disableUseStrict": false,
     "useCompilerPlugins": false,
-    "minifyJS": true
+    "minifyJS": true,
+    "compileWorklet": false,
+    "localPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
   "libVersion": "latest",
-  "appid": "touristappid",
+  "appid": "wxdba5c390724d8f2e",
   "projectname": "HoverBoardConnector",
   "condition": {},
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
-  }
+  },
+  "simulatorPluginLibVersion": {}
 }
