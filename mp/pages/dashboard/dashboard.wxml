@@ -1,61 +1,61 @@
 <view class="container">
-  <view class="top-bar">
-    <view class="conn-status">
+  <view class="dashboard-header">
+    <view class="status-group">
       <view class="dot {{connected ? 'active' : ''}}"></view>
-      <text>{{connected ? '已连接' : '已断开'}}</text>
+      <text class="status-text">{{connected ? '已连接' : '未连接'}}</text>
     </view>
-    <view class="mode-tag {{mode === 1 ? 'remote' : ''}}" bindtap="toggleMode">
-      模式: {{mode === 0 ? '蓝牙控制' : '遥控模式'}}
-    </view>
-  </view>
-
-  <!-- 速度表盘 -->
-  <view class="gauge-section">
-    <view class="speed-gauge">
-      <view class="gauge-bg"></view>
-      <view class="gauge-fill" style="transform: rotate({{speedDeg}}deg)"></view>
-      <view class="speed-value">
-        <text class="num">{{speed}}</text>
-        <text class="unit">RPM</text>
-      </view>
+    <view class="mode-selector" bindtap="toggleMode">
+      <text class="mode-label">驾驶模式</text>
+      <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
     </view>
   </view>
 
-  <!-- 详细数据卡片 -->
-  <view class="stats-grid">
-    <view class="stat-card">
-      <text class="label">电池电压</text>
-      <view class="value-row">
-        <text class="val">{{telemetry.batVoltage || 0}}</text>
-        <text class="unit">V</text>
+  <!-- Speed Arc Section -->
+  <view class="speedometer-section">
+    <view class="arc-container">
+      <view class="arc-bg"></view>
+      <view class="arc-active" style="transform: rotate({{speedDeg}}deg)"></view>
+      <view class="speed-info">
+        <text class="speed-num">{{speed}}</text>
+        <text class="speed-unit">RPM</text>
       </view>
-      <view class="progress-bg">
-        <view class="progress-fill" style="width: {{batPercent}}%; background: {{batColor}}"></view>
+    </view>
+  </view>
+
+  <!-- Main Stats Grid -->
+  <view class="metrics-grid">
+    <view class="metric-card glass">
+      <view class="metric-header">
+        <text class="label">电池电压</text>
+        <text class="val" style="color: {{batColor}}">{{telemetry.batVoltage || 0}}V</text>
+      </view>
+      <view class="progress-track">
+        <view class="progress-bar" style="width: {{batPercent}}%; background: {{batColor}}"></view>
+      </view>
+      <text class="percent-tag">{{batPercent}}%</text>
+    </view>
+
+    <view class="metric-card glass">
+      <view class="metric-header">
+        <text class="label">主板温度</text>
+        <text class="val" style="color: {{tempColor}}">{{telemetry.boardTemp || 0}}°C</text>
+      </view>
+      <view class="progress-track">
+        <view class="progress-bar" style="width: {{telemetry.boardTemp * 1.25}}%; background: {{tempColor}}"></view>
       </view>
     </view>
 
-    <view class="stat-card">
-      <text class="label">主板温度</text>
-      <view class="value-row">
-        <text class="val">{{telemetry.boardTemp || 0}}</text>
-        <text class="unit">°C</text>
-      </view>
-       <view class="progress-bg">
-        <view class="progress-fill" style="width: {{telemetry.boardTemp * 1.2}}%; background: {{tempColor}}"></view>
-      </view>
-    </view>
-
-    <view class="stat-card wide">
-      <text class="label">电机功率负载</text>
-      <view class="power-bars">
-        <view class="bar-item">
+    <view class="metric-card glass wide">
+      <view class="metric-header">
+        <text class="label">电机负载</text>
+        <view class="load-labels">
           <text>左: {{telemetry.cmd1}}</text>
-          <progress percent="{{absCmd1 / 10}}" activeColor="#00d2ff" backgroundColor="#222" stroke-width="4" />
-        </view>
-        <view class="bar-item">
           <text>右: {{telemetry.cmd2}}</text>
-          <progress percent="{{absCmd2 / 10}}" activeColor="#00d2ff" backgroundColor="#222" stroke-width="4" />
         </view>
+      </view>
+      <view class="dual-bar">
+        <progress percent="{{absCmd1 / 10}}" activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.05)" stroke-width="2" />
+        <progress percent="{{absCmd2 / 10}}" activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.05)" stroke-width="2" />
       </view>
     </view>
   </view>

@@ -5,19 +5,21 @@ Page({
   data: {
     telemetry: {},
     speed: 0,
+    controlMode: 'fixed', // 'fixed' or 'floating'
+    touching: false,
+    visualX: 0,
+    visualY: 0,
     stickX: 0,
     stickY: 0,
     steer: 0,
     throttle: 0,
-    speedLimit: 100, // Speed percentage (10-100)
+    speedLimit: 100,
     intervalId: null,
-    centerX: 0,
-    centerY: 0,
-    maxRadius: 110, // Approximate max radius in pixels (360rpx / 2 - stickRadius)
+    maxRadius: 150, // Default in px, will be updated
   },
 
   onLoad() {
-    this.rect = null; // Cache for performance
+    this.rect = null;
     this.initJoystick();
     this.initBleDataHandler();
     this.startSendingCommands();
@@ -29,36 +31,44 @@ Page({
 
   initJoystick() {
     const query = wx.createSelectorQuery();
-    query.select('.joystick-container').boundingClientRect((rect) => {
+    query.select('.joystick-area').boundingClientRect((rect) => {
       if (rect) {
         this.rect = rect;
+        // In fixed mode, place it in the center
         this.setData({
-          centerX: rect.width / 2,
-          centerY: rect.height / 2,
-          maxRadius: (rect.width * 0.9) / 2 - 35 // Account for stick size
+          visualX: rect.width / 2,
+          visualY: rect.height / 2,
+          maxRadius: rect.width / 2 * 0.8 // Allow large range
         });
       }
     }).exec();
   },
 
+  setControlMode(e) {
+    const mode = e.currentTarget.dataset.mode;
+    this.setData({ controlMode: mode });
+    if (mode === 'fixed' && this.rect) {
+      this.setData({
+        visualX: this.rect.width / 2,
+        visualY: this.rect.height / 2
+      });
+    }
+  },
+
   initBleDataHandler() {
     bleManager.onDataCallback = (buffer) => {
       let bytes = new Uint8Array(buffer);
-      
       while (bytes.length >= 6) {
         if (!validateFrame(bytes)) {
           bytes = bytes.subarray(1);
           continue;
         }
-
         const plen = bytes[2] | (bytes[3] << 8);
         const frameLen = 6 + plen;
         const frame = bytes.subarray(0, frameLen);
-
         if (frame[1] === CmdId.TELEMETRY) {
           this.handleTelemetry(frame.slice(4, frameLen - 2));
         }
-
         bytes = bytes.subarray(frameLen);
       }
     };
@@ -67,15 +77,31 @@ Page({
   handleTelemetry(payload) {
     const data = parseTelemetry(payload);
     if (!data) return;
-    const speed = Math.round(Math.abs(data.speedR + data.speedL) / 2);
     this.setData({
       telemetry: data,
-      speed
+      speed: Math.round(Math.abs(data.speedR + data.speedL) / 2)
     });
   },
 
   touchStart(e) {
-    this.handleTouch(e);
+    if (!this.rect) return;
+    const touch = e.touches[0];
+    const rect = this.rect;
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+
+    if (this.data.controlMode === 'floating') {
+      this.setData({
+        touching: true,
+        visualX: touchX,
+        visualY: touchY,
+        stickX: 0,
+        stickY: 0
+      });
+    } else {
+      this.setData({ touching: true });
+      this.handleTouch(e);
+    }
   },
 
   touchMove(e) {
@@ -84,6 +110,7 @@ Page({
 
   touchEnd() {
     this.setData({
+      touching: false,
       stickX: 0,
       stickY: 0,
       steer: 0,
@@ -92,12 +119,13 @@ Page({
   },
 
   handleTouch(e) {
-    if (!this.rect) return;
+    if (!this.rect || !this.data.touching) return;
     const touch = e.touches[0];
     const rect = this.rect;
     
-    let dx = touch.clientX - (rect.left + rect.width / 2);
-    let dy = touch.clientY - (rect.top + rect.height / 2);
+    // Relative to the visual center
+    let dx = (touch.clientX - rect.left) - this.data.visualX;
+    let dy = (touch.clientY - rect.top) - this.data.visualY;
 
     const distance = Math.sqrt(dx * dx + dy * dy);
     const maxRadius = this.data.maxRadius;
@@ -107,17 +135,16 @@ Page({
       dy = (dy / distance) * maxRadius;
     }
 
-    // Calculate normalized values (-1000 to 1000)
+    // Normalize -1000 to 1000
     let steer = Math.round((dx / maxRadius) * 1000);
-    let throttle = Math.round(-(dy / maxRadius) * 1000); // Inverse Y
+    let throttle = Math.round(-(dy / maxRadius) * 1000);
 
-    // Apply Dead Zone (5%)
-    const deadZone = 50;
-    if (Math.abs(steer) < deadZone) steer = 0;
-    if (Math.abs(throttle) < deadZone) throttle = 0;
+    // Dead Zone (5%)
+    if (Math.abs(steer) < 50) steer = 0;
+    if (Math.abs(throttle) < 50) throttle = 0;
 
-    // Apply Speed Limit
-    const limit = (this.data.speedLimit || 100) / 100;
+    // Speed Limit
+    const limit = this.data.speedLimit / 100;
     steer = Math.round(steer * limit);
     throttle = Math.round(throttle * limit);
 
@@ -132,41 +159,26 @@ Page({
   startSendingCommands() {
     const intervalId = setInterval(() => {
       if (!bleManager.connected) return;
-
-      // Build DRIVE payload: [steer:int16][speed:int16] (Little Endian)
       const { steer, throttle } = this.data;
       const payload = new Uint8Array(4);
       const view = new DataView(payload.buffer);
-      
       view.setInt16(0, steer, true);
       view.setInt16(2, throttle, true);
-
       const frame = buildFrame(CmdId.DRIVE, payload);
       bleManager.send(frame);
-    }, 50); // 20Hz update rate
+    }, 50);
     this.setData({ intervalId });
   },
 
   stopSendingCommands() {
-    if (this.data.intervalId) {
-      clearInterval(this.data.intervalId);
-    }
-    // Final zero command
-    const payload = new Uint8Array([0, 0, 0, 0]);
-    const frame = buildFrame(CmdId.DRIVE, payload);
+    if (this.data.intervalId) clearInterval(this.data.intervalId);
+    const frame = buildFrame(CmdId.DRIVE, new Uint8Array([0, 0, 0, 0]));
     bleManager.send(frame);
   },
 
   stopAll() {
-    this.setData({
-      stickX: 0,
-      stickY: 0,
-      steer: 0,
-      throttle: 0
-    });
-    const payload = new Uint8Array([0, 0, 0, 0]);
-    const frame = buildFrame(CmdId.DRIVE, payload);
-    bleManager.send(frame);
+    this.setData({ stickX: 0, stickY: 0, steer: 0, throttle: 0 });
+    bleManager.send(buildFrame(CmdId.DRIVE, new Uint8Array([0, 0, 0, 0])));
   },
 
   goBack() {
@@ -174,8 +186,6 @@ Page({
   },
 
   onSpeedLimitChange(e) {
-    this.setData({
-      speedLimit: e.detail.value
-    });
+    this.setData({ speedLimit: e.detail.value });
   }
 });

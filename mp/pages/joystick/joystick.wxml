@@ -1,54 +1,63 @@
 <view class="container">
-  <!-- Top Telemetry Bar -->
-  <view class="status-bar">
-    <view class="stat-item">
-      <text class="label">电压</text>
+  <view class="header-minimal">
+    <view class="stat-pill">
+      <text class="lab">电压</text>
       <text class="val">{{telemetry.batVoltage || 0}}V</text>
     </view>
-    <view class="stat-item">
-      <text class="label">速度</text>
+    <view class="stat-pill main">
+      <text class="lab">速度</text>
       <text class="val">{{speed}}</text>
     </view>
-    <view class="stat-item">
-      <text class="label">温度</text>
-      <text class="val">{{telemetry.boardTemp || 0}}°C</text>
+    <view class="stat-pill">
+      <text class="lab">温度</text>
+      <text class="val">{{telemetry.boardTemp || 0}}°</text>
+    </view>
+  </view>
+
+  <view class="control-config">
+    <view class="mode-tabs">
+      <view class="tab {{controlMode === 'fixed' ? 'active' : ''}}" bindtap="setControlMode" data-mode="fixed">固定中心</view>
+      <view class="tab {{controlMode === 'floating' ? 'active' : ''}}" bindtap="setControlMode" data-mode="floating">动态浮动</view>
     </view>
   </view>
 
   <!-- Joystick Section -->
-  <view class="joystick-area">
-    <view class="joystick-container" 
-          catchtouchstart="touchStart" 
-          catchtouchmove="touchMove" 
-          catchtouchend="touchEnd">
+  <view class="joystick-area" 
+        catchtouchstart="touchStart" 
+        catchtouchmove="touchMove" 
+        catchtouchend="touchEnd">
+    
+    <view wx:if="{{controlMode === 'fixed' || (controlMode === 'floating' && touching)}}"
+          class="joystick-visual"
+          style="left: {{visualX}}px; top: {{visualY}}px;">
       <view class="joystick-bg"></view>
       <view class="joystick-stick" 
             style="transform: translate({{stickX}}px, {{stickY}}px)"></view>
     </view>
     
-    <view class="axis-debug">
-      <text>转向 (X): {{steer}}</text>
-      <text>速度 (Y): {{throttle}}</text>
+    <view class="axis-debug" wx:if="{{touching}}">
+      <text>S: {{steer}}</text>
+      <text>T: {{throttle}}</text>
     </view>
   </view>
 
   <!-- Speed Limit Adjustment -->
-  <view class="speed-control">
+  <view class="speed-panel">
     <view class="speed-info">
-      <text class="label">最高速度限制</text>
+      <text class="label">最高输出限制</text>
       <text class="val">{{speedLimit}}%</text>
     </view>
     <slider class="speed-slider" 
             min="10" max="100" value="{{speedLimit}}" 
-            activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.1)" 
-            block-size="20"
+            activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.05)" 
+            block-size="16"
             bindchange="onSpeedLimitChange" 
             bindchanging="onSpeedLimitChange" />
   </view>
 
   <!-- Control Actions -->
-  <view class="actions">
-    <button class="stop-btn" bindtap="stopAll">紧急制动</button>
-    <button class="back-btn" bindtap="goBack">返回面板</button>
+  <view class="footer-btns">
+    <button class="btn-stop" bindtap="stopAll">紧急制动</button>
+    <button class="btn-back" bindtap="goBack">退出</button>
   </view>
 </view>

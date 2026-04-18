@@ -68,7 +68,8 @@ Page({
 
     // 计算 UI 特性
     const speed = Math.abs(data.speedR + data.speedL) / 2;
-    const speedDeg = (speed / 1000) * 180 - 90;
+    // 映射到 -45 到 135 度 (180度范围，对应 0-1000 RPM)
+    const speedDeg = (speed / 1000) * 180 - 45;
     
     // 电池百分比估算 (假设 36V 系统, 30V-42V range)
     const volt = data.batVoltage;
@@ -104,7 +105,7 @@ Page({
     
     // 乐观更新
     this.setData({ mode: newMode });
-    wx.showToast({ title: `切换指令已发送 (${newMode === 0 ? '手控' : '遥控'})`, icon: 'none' });
+    wx.showToast({ title: `模式: ${newMode === 0 ? '蓝牙手控' : '遥控模式'}`, icon: 'none' });
 
     // 如果切换到手控模式，自动跳转到摇杆页面
     if (newMode === 0) {
