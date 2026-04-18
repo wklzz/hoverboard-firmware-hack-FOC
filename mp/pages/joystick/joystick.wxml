@@ -1,4 +1,5 @@
 <view class="container">
+  <dashboard-header connected="{{connected}}" mode="{{mode}}" bind:toggle="toggleMode" bind:disconnect="disconnect" />
   <view class="header-minimal">
     <view class="stat-pill">
       <text class="lab">电压</text>
@@ -44,20 +45,14 @@
   <!-- Speed Limit Adjustment -->
   <view class="speed-panel">
     <view class="speed-info">
-      <text class="label">最高输出限制</text>
+      <text class="label">输出档位限制</text>
       <text class="val">{{speedLimit}}%</text>
     </view>
-    <slider class="speed-slider" 
-            min="10" max="100" value="{{speedLimit}}" 
-            activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.05)" 
-            block-size="16"
-            bindchange="onSpeedLimitChange" 
-            bindchanging="onSpeedLimitChange" />
-  </view>
-
-  <!-- Control Actions -->
-  <view class="footer-btns">
-    <button class="btn-stop" bindtap="stopAll">紧急制动</button>
-    <button class="btn-back" bindtap="goBack">退出</button>
+    <view class="tier-selector">
+      <view class="tier {{speedLimit === 25 ? 'active' : ''}}" bindtap="setTier" data-val="25">1档</view>
+      <view class="tier {{speedLimit === 50 ? 'active' : ''}}" bindtap="setTier" data-val="50">2档</view>
+      <view class="tier {{speedLimit === 75 ? 'active' : ''}}" bindtap="setTier" data-val="75">3档</view>
+      <view class="tier {{speedLimit === 100 ? 'active' : ''}}" bindtap="setTier" data-val="100">4档</view>
+    </view>
   </view>
 </view>

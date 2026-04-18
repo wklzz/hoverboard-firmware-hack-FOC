@@ -1,0 +1,11 @@
+<view class="dashboard-header">
+  <view class="status-group">
+    <view class="dot {{connected ? 'active' : ''}}"></view>
+    <text class="status-text">{{connected ? '已连接' : '未连接'}}</text>
+    <view wx:if="{{connected}}" class="disconnect-btn" catchtap="onDisconnect">断开</view>
+  </view>
+  <view class="mode-selector" bindtap="onToggle">
+    <text class="mode-label">驾驶模式</text>
+    <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
+  </view>
+</view>

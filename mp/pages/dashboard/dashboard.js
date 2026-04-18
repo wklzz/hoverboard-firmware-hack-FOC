@@ -1,5 +1,5 @@
 import { bleManager } from '../../utils/ble';
-import { CmdId, buildFrame, parseTelemetry, validateFrame } from '../../utils/protocol';
+import { CmdId, buildFrame, parseTelemetry, validateFrame, ACK_MASK } from '../../utils/protocol';
 
 Page({
   data: {
@@ -17,13 +17,21 @@ Page({
 
   onLoad() {
     this.initBleDataHandler();
-    // 初始查询状态
-    this.sendPing();
-    this.requestStatus();
+    bleManager.onAuthCallback = () => {
+      this.requestStatus();
+    };
+  },
+
+  onShow() {
+    this.setData({ connected: bleManager.connected });
+    if (bleManager.connected) {
+      this.requestStatus();
+    }
   },
 
   onUnload() {
-    // 页面关闭时不一定断开连接，保持运行
+    bleManager.onDataCallback = null;
+    bleManager.onAuthCallback = null;
   },
 
   initBleDataHandler() {
@@ -45,13 +53,18 @@ Page({
 
         if (cmdId === CmdId.TELEMETRY) {
           this.handleTelemetry(frame.slice(4, frameLen - 2));
-        } else if (cmdId === (CmdId.STATUS | 0x80)) {
+        } else if (cmdId === (CmdId.STATUS | ACK_MASK)) {
           const view = new DataView(frame.buffer, frame.byteOffset, frameLen);
           const state = view.getUint8(4);
           const mode = view.getUint8(5);
           console.log(`[Dashboard] STATUS ACK received - State: ${state}, Mode: ${mode}`);
           this.setData({ mode });
-        } else if (cmdId === (CmdId.CONFIG | 0x80)) {
+          
+          // 自动路由：如果是蓝牙手控模式，进入摇杆页
+          if (mode === 0) {
+            wx.redirectTo({ url: '/pages/joystick/joystick' });
+          }
+        } else if (cmdId === (CmdId.CONFIG | ACK_MASK)) {
           console.log('[Dashboard] CONFIG ACK received, requesting latest status...');
           this.requestStatus();
         }
@@ -106,31 +119,17 @@ Page({
     // 乐观更新
     this.setData({ mode: newMode });
     wx.showToast({ title: `模式: ${newMode === 0 ? '蓝牙手控' : '遥控模式'}`, icon: 'none' });
-
-    // 如果切换到手控模式，自动跳转到摇杆页面
-    if (newMode === 0) {
-      setTimeout(() => {
-        wx.navigateTo({ url: '/pages/joystick/joystick' });
-      }, 500);
-    }
-  },
-
-  enterJoystick() {
-    wx.navigateTo({ url: '/pages/joystick/joystick' });
   },
 
   requestStatus() {
-    const frame = buildFrame(CmdId.STATUS);
-    bleManager.send(frame);
-  },
-
-  sendPing() {
-    const frame = buildFrame(CmdId.PING);
-    bleManager.send(frame);
+    if (bleManager.connected) {
+      const frame = buildFrame(CmdId.STATUS);
+      bleManager.send(frame);
+    }
   },
 
   disconnect() {
     bleManager.disconnect();
-    wx.navigateBack();
+    wx.reLaunch({ url: '/pages/index/index' });
   }
 })

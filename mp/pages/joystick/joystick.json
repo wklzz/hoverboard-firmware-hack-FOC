@@ -1,5 +1,7 @@
 {
   "navigationBarTitleText": "摇杆控制",
-  "usingComponents": {},
+  "usingComponents": {
+    "dashboard-header": "/components/header/header"
+  },
   "disableScroll": true
 }

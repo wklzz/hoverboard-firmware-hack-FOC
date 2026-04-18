@@ -151,34 +151,29 @@
   font-weight: bold;
 }
 
-.speed-info .val {
-  font-size: 20rpx;
-  color: #00d2ff;
-  font-weight: bold;
-}
-
-/* Footer Buttons */
-.footer-btns {
+.tier-selector {
   display: flex;
-  gap: 20rpx;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 10rpx;
 }
 
-.btn-stop {
-  flex: 2;
-  background: #ff4d4d;
-  color: #000;
-  font-weight: 900;
-  font-size: 24rpx;
-  border-radius: 24rpx;
-  padding: 24rpx 0;
-}
-
-.btn-back {
+.tier {
   flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 22rpx;
-  border-radius: 24rpx;
-  padding: 24rpx 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.tier.active {
+  background: rgba(0, 210, 255, 0.15);
+  color: #00d2ff;
+  border-color: rgba(0, 210, 255, 0.4);
+  font-weight: bold;
+  box-shadow: 0 0 20rpx rgba(0, 210, 255, 0.1);
 }

@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "实时仪表盘",
-  "usingComponents": {}
+  "usingComponents": {
+    "dashboard-header": "/components/header/header"
+  }
 }

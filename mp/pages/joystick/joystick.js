@@ -1,5 +1,5 @@
 import { bleManager } from '../../utils/ble';
-import { CmdId, buildFrame, parseTelemetry, validateFrame } from '../../utils/protocol';
+import { CmdId, buildFrame, parseTelemetry, validateFrame, ACK_MASK } from '../../utils/protocol';
 
 Page({
   data: {
@@ -14,19 +14,58 @@ Page({
     steer: 0,
     throttle: 0,
     speedLimit: 100,
+    connected: false,
+    mode: 0,
     intervalId: null,
     maxRadius: 150, // Default in px, will be updated
   },
 
   onLoad() {
     this.rect = null;
+    this.loadSettings();
     this.initJoystick();
     this.initBleDataHandler();
     this.startSendingCommands();
+    
+    bleManager.onAuthCallback = () => {
+      this.queryStatus();
+    };
+  },
+
+  onShow() {
+    this.setData({ connected: bleManager.connected });
+    if (bleManager.connected) {
+      this.queryStatus(); // 进入页面时同步模式
+    }
   },
 
   onUnload() {
     this.stopSendingCommands();
+    bleManager.onDataCallback = null;
+    bleManager.onAuthCallback = null;
+  },
+
+  loadSettings() {
+    const speedLimit = wx.getStorageSync('speedLimit') || 100;
+    const controlMode = wx.getStorageSync('controlMode') || 'fixed';
+    this.setData({ speedLimit, controlMode });
+  },
+
+  queryStatus() {
+    if (bleManager.connected) {
+      const frame = buildFrame(CmdId.STATUS, new Uint8Array(0));
+      bleManager.send(frame);
+    }
+  },
+
+  toggleMode() {
+    const newMode = this.data.mode === 0 ? 1 : 0;
+    const payload = new Uint8Array([0x01, newMode]);
+    const frame = buildFrame(CmdId.CONFIG, payload);
+    bleManager.send(frame);
+    // 注意：不立即 setData，等 ACK 或下一帧 Telemetry 同步会更准确
+    // 但为了响应感，可以先预设，或者依靠 queryStatus
+    this.setData({ mode: newMode });
   },
 
   initJoystick() {
@@ -47,6 +86,7 @@ Page({
   setControlMode(e) {
     const mode = e.currentTarget.dataset.mode;
     this.setData({ controlMode: mode });
+    wx.setStorageSync('controlMode', mode);
     if (mode === 'fixed' && this.rect) {
       this.setData({
         visualX: this.rect.width / 2,
@@ -66,9 +106,23 @@ Page({
         const plen = bytes[2] | (bytes[3] << 8);
         const frameLen = 6 + plen;
         const frame = bytes.subarray(0, frameLen);
-        if (frame[1] === CmdId.TELEMETRY) {
+        const cmdId = frame[1];
+        
+        if (cmdId === CmdId.TELEMETRY) {
           this.handleTelemetry(frame.slice(4, frameLen - 2));
+        } else if (cmdId === (CmdId.STATUS | ACK_MASK)) {
+          // payload[0] 是系统状态，payload[1] 是 ctrlMode
+          const mode = frame[5]; 
+          this.setData({ mode });
+          // 自动路由：如果是遥控模式，返回仪表盘
+          if (mode === 1) {
+            wx.redirectTo({ url: '/pages/dashboard/dashboard' });
+          }
+        } else if (cmdId === (CmdId.CONFIG | ACK_MASK)) {
+          // 配置成功的回复，可以再次查询状态
+          this.queryStatus();
         }
+        
         bytes = bytes.subarray(frameLen);
       }
     };
@@ -185,7 +239,14 @@ Page({
     wx.navigateBack();
   },
 
-  onSpeedLimitChange(e) {
-    this.setData({ speedLimit: e.detail.value });
+  disconnect() {
+    bleManager.disconnect();
+    wx.reLaunch({ url: '/pages/index/index' });
+  },
+
+  setTier(e) {
+    const val = parseInt(e.currentTarget.dataset.val);
+    this.setData({ speedLimit: val });
+    wx.setStorageSync('speedLimit', val);
   }
 });

@@ -12,6 +12,7 @@ class BLEManager {
     this.connected = false;
     this.onDataCallback = null;
     this.onStatusCallback = null;
+    this.onAuthCallback = null;
   }
 
   log(msg) {
@@ -138,6 +139,7 @@ class BLEManager {
         } else if (bytes[1] === (CmdId.AUTH_RES | 0x80)) { // AUTH_RES ACK
           console.log('[BLE Auth] Authenticated Successfully!');
           wx.showToast({ title: '设备已认证', icon: 'success' });
+          if (this.onAuthCallback) this.onAuthCallback();
           return;
         }
       }
