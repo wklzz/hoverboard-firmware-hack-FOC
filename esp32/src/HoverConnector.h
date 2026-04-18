@@ -37,6 +37,7 @@ public:
 
     void begin() {
         _uart.begin(_baud, SERIAL_8N1, _rxPin, _txPin);
+        _lastDriveCmdTime = millis(); // 初始化指令时间
         Serial.printf("[HC] UART to STM32 ready. TX=%d RX=%d Baud=%lu\n",
                       _txPin, _rxPin, _baud);
     }
@@ -57,8 +58,18 @@ public:
             }
         }
 
-        // 2. 定期向 STM32 发送心跳包 (Protocol B)
-        // 只要不是在 OTA 或 ALARM 状态，就以 50ms 频率维持指令，防止 STM32 报警
+        // 2. 指令超时保护 (Watchdog)
+        // 如果超过 500ms 没有收到来自手机的指令，强行将速度归零，确保安全
+        if (millis() - _lastDriveCmdTime > 500) {
+            if (_currentDrive.speed != 0 || _currentDrive.steer != 0) {
+                _currentDrive.speed = 0;
+                _currentDrive.steer = 0;
+                Serial.println("[HC] WATCHDOG: No command from phone for 500ms. Emergency Stop.");
+            }
+        }
+
+        // 3. 定期向 STM32 发送心跳包 (Protocol B)
+        // 只要不是在 OTA 或 ALARM 状态，就维持指令，防止 STM32 报警
         if (_sm.current != SystemState::OTA && _sm.current != SystemState::ALARM) {
             if (millis() - _lastHeartbeat > 50) {
                 _lastHeartbeat = millis();
@@ -175,9 +186,15 @@ private:
 
     void handleDriveCmd(const uint8_t* payload, uint16_t len) {
         if (len < 4) return;
-        // 小端读取 steer, speed 并存入缓存，由 update() 循环发送
+        // 小端读取 steer, speed 并存入缓存
         _currentDrive.steer = (int16_t)(payload[0] | (payload[1] << 8));
         _currentDrive.speed = (int16_t)(payload[2] | (payload[3] << 8));
+        _lastDriveCmdTime = millis(); // 更新指令时间
+
+        // 立即转发给 STM32，提升操作响应实时性
+        _currentDrive.calcChecksum();
+        _uart.write((uint8_t*)&_currentDrive, sizeof(RuntimeCmd));
+        _lastHeartbeat = millis(); // 重置心跳计时，避免短时间内重复发送
     }
 
     void startOtaHandover() {
@@ -240,11 +257,14 @@ private:
             memcpy(&fb, _stm32RxBuffer.data(), sizeof(RuntimeFeedback));
             if (fb.isValid()) {
                 // 封装为 TELEMETRY 包发给手机
-                // Payload 为除了 start 和 checksum 之外的 14 个字节
-                uint8_t payload[14];
-                memcpy(payload, &fb.cmd1, 14);
-                
-                sendResponseToAdapters(static_cast<uint8_t>(CmdId::TELEMETRY), payload, 14);
+                // 节流处理：手机端不需要 100Hz 的数据，限制为 5Hz (200ms) 以消除小程序 setData 卡顿
+                static uint32_t lastBleTelemetry = 0;
+                if (millis() - lastBleTelemetry > 200) {
+                    lastBleTelemetry = millis();
+                    uint8_t payload[14];
+                    memcpy(payload, &fb.cmd1, 14);
+                    sendResponseToAdapters(static_cast<uint8_t>(CmdId::TELEMETRY), payload, 14);
+                }
             } else {
                 Serial.println("[HC] Protocol B checksum err!");
             }
@@ -270,6 +290,7 @@ private:
     }
 
     uint32_t                _lastHeartbeat = 0;
+    uint32_t                _lastDriveCmdTime = 0;
     RuntimeCmd              _currentDrive;
     HardwareSerial&         _uart;
     int                     _txPin, _rxPin;
