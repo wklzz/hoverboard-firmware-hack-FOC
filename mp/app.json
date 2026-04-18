@@ -2,7 +2,8 @@
   "pages": [
     "pages/index/index",
     "pages/dashboard/dashboard",
-    "pages/joystick/joystick"
+    "pages/joystick/joystick",
+    "pages/ota/ota"
   ],
   "window": {
     "backgroundTextStyle": "light",

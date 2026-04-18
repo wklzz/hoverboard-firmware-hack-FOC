@@ -1,0 +1,41 @@
+<view class="container">
+  <view class="ota-card glass">
+    <view class="header">
+      <text class="title">固件升级</text>
+      <text class="subtitle">ESP32 System Update</text>
+    </view>
+
+    <view class="status-section">
+      <view class="progress-circle">
+        <svg class="svg-ring" viewBox="0 0 100 100">
+          <circle class="bg" cx="50" cy="50" r="45"></circle>
+          <circle class="active" cx="50" cy="50" r="45" style="stroke-dashoffset: {{440 - (440 * progress / 100)}}"></circle>
+        </svg>
+        <view class="progress-text">
+          <text class="percent">{{progress}}%</text>
+          <text class="speed">{{speed}} KB/s</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="file-info" wx:if="{{fileName}}">
+      <text class="file-name">{{fileName}}</text>
+      <text class="file-size">{{(fileSize / 1024).toFixed(1)}} KB</text>
+    </view>
+
+    <view class="action-section">
+      <button wx:if="{{!updating}}" class="btn-primary" bindtap="chooseFile">选择固件文件</button>
+      <button wx:if="{{updating}}" class="btn-danger" bindtap="abortUpdate">取消升级</button>
+      <button wx:if="{{fileReady && !updating}}" class="btn-success" bindtap="startUpdate">开始升级</button>
+    </view>
+  </view>
+
+  <view class="log-panel glass">
+    <scroll-view scroll-y class="log-scroll" scroll-top="{{scrollTop}}">
+      <view wx:for="{{logs}}" wx:key="index" class="log-line">
+        <text class="log-time">{{item.time}}</text>
+        <text class="log-msg">{{item.msg}}</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

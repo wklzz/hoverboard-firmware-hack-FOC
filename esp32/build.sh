@@ -68,6 +68,15 @@ echo "==== 编译成功！ ===="
 echo "固件路径: ${BIN_PATH}"
 ls -lh "$BIN_PATH" 2>/dev/null || true
 
+# --- 步骤 2.5: 展示分区表 ---
+echo ""
+echo "==== [2.5/3] 展示分区表 (确认 OTA 布局) ===="
+docker run --rm \
+    -v "pio_cache:/root/.platformio" \
+    -v "$SCRIPT_DIR:/workspace" \
+    "$IMAGE_NAME" \
+    run -e "$ENV_NAME" -t partitions
+
 # --- 步骤 3: 烧录 (可选) ---
 if [ "$FLASH" = true ]; then
     echo ""

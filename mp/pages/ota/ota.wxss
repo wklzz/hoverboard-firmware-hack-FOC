@@ -1,0 +1,157 @@
+.container {
+  padding: 30rpx;
+  background: #121212;
+  min-height: 100vh;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 40rpx;
+}
+
+.ota-card {
+  padding: 60rpx 40rpx;
+  margin-bottom: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 60rpx;
+}
+
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: 4rpx;
+}
+
+.subtitle {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  margin-top: 10rpx;
+}
+
+/* Progress Circle */
+.progress-circle {
+  position: relative;
+  width: 320rpx;
+  height: 320rpx;
+  margin: 40rpx 0;
+}
+
+.svg-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.svg-ring circle {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.svg-ring .bg {
+  stroke: rgba(255, 255, 255, 0.05);
+}
+
+.svg-ring .active {
+  stroke: #00d2ff;
+  stroke-dasharray: 283; /* 2 * PI * 45 */
+  transition: stroke-dashoffset 0.3s ease;
+  filter: drop-shadow(0 0 10rpx rgba(0, 210, 255, 0.5));
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.percent {
+  display: block;
+  font-size: 72rpx;
+  font-weight: 900;
+  color: #00d2ff;
+  font-family: monospace;
+}
+
+.speed {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.file-info {
+  margin-top: 40rpx;
+  text-align: center;
+}
+
+.file-name {
+  display: block;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 10rpx;
+}
+
+.file-size {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.action-section {
+  width: 100%;
+  margin-top: 60rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+button {
+  width: 100% !important;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  padding: 24rpx 0;
+}
+
+.btn-primary { background: #00d2ff; color: #000; }
+.btn-success { background: #00ff88; color: #000; }
+.btn-danger { background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border: 1px solid rgba(255, 77, 77, 0.2); }
+
+/* Log Panel */
+.log-panel {
+  padding: 30rpx;
+  height: 400rpx;
+}
+
+.log-scroll {
+  height: 100%;
+}
+
+.log-line {
+  margin-bottom: 10rpx;
+  font-family: monospace;
+  font-size: 18rpx;
+  display: flex;
+}
+
+.log-time {
+  color: rgba(255, 255, 255, 0.2);
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.log-msg {
+  color: rgba(255, 255, 255, 0.6);
+  word-break: break-all;
+}

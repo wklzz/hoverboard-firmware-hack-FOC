@@ -5,6 +5,7 @@
 #include "IAdapter.h"
 #include "StateMachine.h"
 #include "protocol.h"
+#include "OTAHandler.h"
 
 // ============================================================
 // HoverConnector — 核心协调层
@@ -147,7 +148,7 @@ private:
                 case CmdId::ERASE:
                 case CmdId::WRITE:
                 case CmdId::BOOT:
-                    // OTA 相关指令处理
+                    // 透传指令 (主要用于 STM32 OTA)
                     if (_sm.current != SystemState::OTA) {
                         startOtaHandover();
                         _sm.current = SystemState::OTA; 
@@ -155,6 +156,15 @@ private:
                     Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
                     _uart.write(frame, frameLen);
                     _uart.flush();
+                    break;
+                case CmdId::OTA_BEGIN:
+                    handleOtaBegin(&frame[4], payloadLen);
+                    break;
+                case CmdId::OTA_DATA:
+                    handleOtaData(&frame[4], payloadLen);
+                    break;
+                case CmdId::OTA_END:
+                    handleOtaEnd();
                     break;
                 default:
                     Serial.printf("[HC] -> STM32 Unknown CMD=0x%02X len=%u\n", cmdId, payloadLen);
@@ -195,6 +205,59 @@ private:
         _currentDrive.calcChecksum();
         _uart.write((uint8_t*)&_currentDrive, sizeof(RuntimeCmd));
         _lastHeartbeat = millis(); // 重置心跳计时，避免短时间内重复发送
+    }
+
+    // ── ESP32 OTA 处理逻辑 ──────────────────────────────────────
+    void handleOtaBegin(const uint8_t* payload, uint16_t len) {
+        if (len < 5) return;
+        uint32_t size = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8) | 
+                        ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 24);
+        uint8_t type = payload[4]; // 0: ESP32, 1: STM32 (暂时只处理 ESP32)
+
+        if (type == 0) {
+            // 在开始 OTA 之前，确保电机停止，状态机切入 OTA 模式
+            _sm.current = SystemState::OTA;
+            RuntimeCmd stopCmd;
+            stopCmd.steer = 0;
+            stopCmd.speed = 0;
+            stopCmd.calcChecksum();
+            _uart.write((uint8_t*)&stopCmd, sizeof(RuntimeCmd));
+
+            if (_ota.begin(size)) {
+                sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_BEGIN) | ACK_MASK, nullptr, 0);
+            } else {
+                uint8_t err = 0x01;
+                sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_BEGIN) | ACK_MASK, &err, 1);
+            }
+        }
+    }
+
+    void handleOtaData(const uint8_t* payload, uint16_t len) {
+        if (len < 4) return;
+        uint32_t offset = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8) | 
+                          ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 24);
+        
+        if (_ota.handleData(offset, &payload[4], len - 4)) {
+            // 返回当前接收到的字节数作为确认
+            uint32_t received = _ota.bytesReceived();
+            uint8_t ackPayload[4];
+            memcpy(ackPayload, &received, 4);
+            sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_DATA) | ACK_MASK, ackPayload, 4);
+        } else {
+            uint8_t err = 0x01;
+            sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_DATA) | ACK_MASK, &err, 1);
+        }
+    }
+
+    void handleOtaEnd() {
+        if (_ota.end()) {
+            sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_END) | ACK_MASK, nullptr, 0);
+            delay(500);
+            ESP.restart();
+        } else {
+            uint8_t err = 0x01;
+            sendResponseToAdapters(static_cast<uint8_t>(CmdId::OTA_END) | ACK_MASK, &err, 1);
+        }
     }
 
     void startOtaHandover() {
@@ -292,6 +355,7 @@ private:
     uint32_t                _lastHeartbeat = 0;
     uint32_t                _lastDriveCmdTime = 0;
     RuntimeCmd              _currentDrive;
+    OTAHandler              _ota;
     HardwareSerial&         _uart;
     int                     _txPin, _rxPin;
     uint32_t                _baud;

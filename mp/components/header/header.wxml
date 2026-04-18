@@ -8,4 +8,7 @@
     <text class="mode-label">驾驶模式</text>
     <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
   </view>
+  <view class="ota-entry" bindtap="onUpdate">
+    <text>V2.1</text>
+  </view>
 </view>

@@ -17,7 +17,10 @@ export const CmdId = {
   CONFIG: 0x20,
   AUTH_REQ: 0x30,
   AUTH_RES: 0x31,
-  TELEMETRY: 0x90
+  TELEMETRY: 0x90,
+  OTA_BEGIN: 0x40,
+  OTA_DATA: 0x41,
+  OTA_END: 0x42
 };
 
 /**

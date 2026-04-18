@@ -15,6 +15,9 @@ Component({
     },
     onDisconnect() {
       this.triggerEvent('disconnect');
+    },
+    onUpdate() {
+      wx.navigateTo({ url: '/pages/ota/ota' });
     }
   }
 })

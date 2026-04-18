@@ -34,6 +34,11 @@ enum class CmdId : uint8_t {
     AUTH_REQ   = 0x30,  // 身份认证挑战 (ESP32->Client): [challenge:uint32]
     AUTH_RES   = 0x31,  // 身份认证响应 (Client->ESP32): [response:uint32]
     TELEMETRY  = 0x90,  // 传感器数据回传 (ESP32→手机): 封装 Protocol B 数据
+
+    // ── OTA 扩展指令 ──────────────────────────────────────────
+    OTA_BEGIN  = 0x40,  // 开始 OTA: [size:uint32][type:uint8] (0:ESP32, 1:STM32)
+    OTA_DATA   = 0x41,  // 传输数据: [offset:uint32][data:N]
+    OTA_END    = 0x42,  // 结束 OTA: [checksum:uint16]
 };
 
 // ── 协议类型 A/C 帧结构 ────────────────────────────────────
