@@ -84,7 +84,7 @@ docker run --rm \
     -v "pio_cache:/root/.platformio" \
     -v "$SCRIPT_DIR:/workspace" \
     "$IMAGE_NAME" \
-    -c 'python3 $(find /root/.platformio/packages -name gen_esp32part.py | head -n 1) /workspace/partitions.csv'
+    -c 'python3 $(find /root/.platformio/packages -name gen_esp32part.py | head -n 1) /workspace/partitions.csv /tmp/partitions.bin'
 
 # --- 步骤 3: 烧录 (可选) ---
 if [ "$FLASH" = true ]; then
