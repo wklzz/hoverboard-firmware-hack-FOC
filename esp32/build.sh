@@ -72,10 +72,11 @@ ls -lh "$BIN_PATH" 2>/dev/null || true
 echo ""
 echo "==== [2.5/3] 展示分区表 (确认 OTA 布局) ===="
 docker run --rm \
+    --entrypoint /bin/sh \
     -v "pio_cache:/root/.platformio" \
     -v "$SCRIPT_DIR:/workspace" \
     "$IMAGE_NAME" \
-    run -e "$ENV_NAME" -t partitions
+    -c 'python3 $(find /root/.platformio/packages -name gen_esp32part.py | head -n 1) /workspace/partitions.csv'
 
 # --- 步骤 3: 烧录 (可选) ---
 if [ "$FLASH" = true ]; then
