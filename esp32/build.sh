@@ -14,6 +14,14 @@ set -e
 IMAGE_NAME="esp32-hoverboard-builder"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --- 步骤 0: 更新代码 ---
+echo "==== [0/3] 更新代码 (Git Pull) ===="
+if [ -d "$SCRIPT_DIR/../.git" ]; then
+    git -C "$SCRIPT_DIR/.." pull || echo "警告: Git pull 失败，将使用本地代码继续。"
+else
+    echo "未检测到 Git 仓库，跳过更新。"
+fi
+
 # 解析参数
 MODE="ble"
 FLASH=false
