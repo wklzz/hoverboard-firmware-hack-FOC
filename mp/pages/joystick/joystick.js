@@ -25,7 +25,7 @@ Page({
     this.loadSettings();
     this.initJoystick();
     this.initBleDataHandler();
-    this.startSendingCommands();
+    // 移除 onLoad 里的自动启动，改为按需启动
     
     bleManager.onAuthCallback = () => {
       this.queryStatus();
@@ -139,6 +139,10 @@ Page({
 
   touchStart(e) {
     if (!this.rect) return;
+    
+    // 启动发送定时器
+    this.startSendingCommands();
+
     const touch = e.touches[0];
     const rect = this.rect;
     const touchX = touch.clientX - rect.left;
@@ -170,6 +174,8 @@ Page({
       steer: 0,
       throttle: 0
     });
+    // 注意：这里不需要手动 clearInterval，
+    // 定时器会在补发完 10 次归零指令后自动关闭
   },
 
   handleTouch(e) {
@@ -211,23 +217,46 @@ Page({
   },
 
   startSendingCommands() {
+    if (this.data.intervalId) return; // 已经在运行了
+
+    let stopCounter = 0; // 离手后的补发计数器
+
     const intervalId = setInterval(() => {
-      if (!bleManager.connected) return;
-      const { steer, throttle } = this.data;
+      if (!bleManager.connected) {
+        this.stopSendingCommands();
+        return;
+      }
+
+      const { steer, throttle, touching } = this.data;
+
+      // 1. 发送数据
       const payload = new Uint8Array(4);
       const view = new DataView(payload.buffer);
       view.setInt16(0, steer, true);
       view.setInt16(2, throttle, true);
       const frame = buildFrame(CmdId.DRIVE, payload);
       bleManager.send(frame);
+
+      // 2. 状态检查：如果手指离开了
+      if (!touching) {
+        stopCounter++;
+        if (stopCounter >= 10) { // 补发 10 帧归零包后停止
+          this.stopSendingCommands();
+          console.log('[Joystick] 静默模式：已补发 10 帧归零包，停止发送');
+        }
+      } else {
+        stopCounter = 0; // 只要还在摸，就重置计数器
+      }
     }, 50);
+
     this.setData({ intervalId });
   },
 
   stopSendingCommands() {
-    if (this.data.intervalId) clearInterval(this.data.intervalId);
-    const frame = buildFrame(CmdId.DRIVE, new Uint8Array([0, 0, 0, 0]));
-    bleManager.send(frame);
+    if (this.data.intervalId) {
+      clearInterval(this.data.intervalId);
+      this.setData({ intervalId: null });
+    }
   },
 
   stopAll() {
