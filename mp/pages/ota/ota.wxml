@@ -20,7 +20,7 @@
 
     <view class="file-info" wx:if="{{fileName}}">
       <text class="file-name">{{fileName}}</text>
-      <text class="file-size">{{(fileSize / 1024).toFixed(1)}} KB</text>
+      <text class="file-size">{{fileSize}} KB</text>
     </view>
 
     <view class="action-section">

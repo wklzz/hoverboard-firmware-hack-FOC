@@ -36,7 +36,7 @@ Page({
         const file = res.tempFiles[0];
         this.setData({
           fileName: file.name,
-          fileSize: file.size,
+          fileSize: (file.size / 1024).toFixed(1),
           fileReady: true
         });
         this.readFile(file.path);
