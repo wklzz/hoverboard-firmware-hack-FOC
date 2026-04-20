@@ -28,6 +28,11 @@ public:
         NimBLEDevice::init(_deviceName);
         NimBLEDevice::setMTU(517);
 
+        // --- 开启底层配对加密 (Passkey) ---
+        NimBLEDevice::setSecurityAuth(true, true, true); // Bonding, MITM, Secure Connections
+        NimBLEDevice::setSecurityPasskey(123456);       // 设置 6 位 PIN 码
+        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // 模拟显示屏设备
+
         _server = NimBLEDevice::createServer();
         _server->setCallbacks(this);
 
@@ -37,7 +42,7 @@ public:
             NIMBLE_PROPERTY::NOTIFY);
 
         _rxChar = service->createCharacteristic(NUS_RX_UUID,
-            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::WRITE_ENC);
         _rxChar->setCallbacks(this);
 
         service->start();
@@ -64,7 +69,7 @@ public:
         NimBLEDevice::stopAdvertising();
     }
 
-    // 所有的协议逻辑迁移到这里
+    // 协议处理
     void handle() override {
         if (_disconnectionPending) {
             _disconnectionPending = false;
@@ -82,65 +87,19 @@ public:
 
         if (localBuf.empty()) return;
 
-        const uint8_t* data = localBuf.data();
-        size_t len = localBuf.size();
-
-        if (!_authenticated) {
-            // 解析是否为相关的认证包
-            if (len >= 6 && data[0] == PKT_SOF) {
-                if (data[1] == static_cast<uint8_t>(CmdId::AUTH_REQ)) {
-                    sendChallenge();
-                    return;
-                }
-                else if (data[1] == static_cast<uint8_t>(CmdId::AUTH_RES)) {
-                    uint16_t pLen = (uint8_t)data[2] | ((uint8_t)data[3] << 8);
-                    if (pLen == 4 && len >= 6 + 4) {
-                        uint32_t response = (uint8_t)data[4] | ((uint8_t)data[5] << 8) | ((uint8_t)data[6] << 16) | ((uint8_t)data[7] << 24);
-                        if (response == (_challenge ^ 0x12345678)) {
-                            _authenticated = true;
-                            Serial.println("[BLE] Auth SUCCESS! Control opened.");
-                            
-                            uint8_t out[6];
-                            size_t outLen = build_frame(static_cast<uint8_t>(CmdId::AUTH_RES) | ACK_MASK, nullptr, 0, out, sizeof(out));
-                            send(out, outLen);
-                            return;
-                        }
-                    }
-                }
-            }
-            Serial.println("[BLE] Auth FAILED or Unknown packet. Dropping.");
-            return;
-        }
-
-        // 认证通过，转发到上层 HoverConnector
+        // 转发到上层 HoverConnector
         if (onRawData) {
-            onRawData(data, len);
+            onRawData(localBuf.data(), localBuf.size());
         }
     }
 
     bool isConnected() const { return _connected; }
 
 private:
-    void sendChallenge() {
-        _challenge = esp_random();
-        uint8_t payload[4];
-        payload[0] = (uint8_t)(_challenge & 0xFF);
-        payload[1] = (uint8_t)((_challenge >> 8) & 0xFF);
-        payload[2] = (uint8_t)((_challenge >> 16) & 0xFF);
-        payload[3] = (uint8_t)((_challenge >> 24) & 0xFF);
-
-        uint8_t frame[10];
-        size_t len = build_frame(static_cast<uint8_t>(CmdId::AUTH_REQ), payload, 4, frame, sizeof(frame));
-        if (len > 0) {
-            send(frame, len); // 内部已通过 handle 主线程调用
-            Serial.printf("[BLE] Sent AUTH_REQ challenge: 0x%08X\n", _challenge);
-        }
-    }
 
     // NimBLEServerCallbacks
     void onConnect(NimBLEServer* pServer) override {
         _connected = true;
-        _authenticated = false;
         // 注意：这里仍然在回调中，但 stopAdvertising 通常较快且不涉及协议交互
         NimBLEDevice::stopAdvertising();
         Serial.println("[BLE] Client connected, advertising stopped.");
@@ -148,7 +107,6 @@ private:
 
     void onDisconnect(NimBLEServer* pServer) override {
         _connected = false;
-        _authenticated = false;
         _disconnectionPending = true; 
         Serial.println("[BLE] Client disconnected, restarting advertising...");
         NimBLEDevice::startAdvertising();
@@ -170,8 +128,6 @@ private:
     NimBLECharacteristic*    _rxChar  = nullptr;
     volatile bool         _connected = false;
     volatile bool         _disconnectionPending = false;
-    bool                  _authenticated = false;
-    uint32_t              _challenge = 0;
 
     std::vector<uint8_t>  _incomingData;
     std::mutex            _bufferMutex;
