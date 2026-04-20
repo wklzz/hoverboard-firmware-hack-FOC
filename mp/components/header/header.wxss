@@ -50,15 +50,15 @@
 }
 
 .mode-selector {
-  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 10rpx 20rpx;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16rpx;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12rpx 28rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 100rpx;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all 0.2s ease;
+  min-width: 160rpx;
+  justify-content: center;
 }
 
 .mode-selector:active {
@@ -66,10 +66,6 @@
   transform: scale(0.98);
 }
 
-.mode-info {
-  text-align: right;
-  margin-right: 16rpx;
-}
 
 .mode-label {
   display: block;
@@ -90,11 +86,12 @@
 .dropdown-arrow {
   width: 0;
   height: 0;
-  border-left: 8rpx solid transparent;
-  border-right: 8rpx solid transparent;
-  border-top: 10rpx solid #00d2ff;
+  border-left: 7rpx solid transparent;
+  border-right: 7rpx solid transparent;
+  border-top: 9rpx solid #00d2ff;
   opacity: 0.8;
-  margin-top: 4rpx;
+  margin-left: 14rpx;
+  margin-top: 2rpx;
 }
 
 .ota-entry {
