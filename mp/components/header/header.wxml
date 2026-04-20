@@ -5,8 +5,11 @@
     <view wx:if="{{connected}}" class="disconnect-btn" catchtap="onDisconnect">断开</view>
   </view>
   <view class="mode-selector" bindtap="onToggle">
-    <text class="mode-label">驾驶模式</text>
-    <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
+    <view class="mode-info">
+      <text class="mode-label">驾驶模式</text>
+      <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
+    </view>
+    <view class="dropdown-arrow"></view>
   </view>
   <view class="ota-entry" bindtap="onUpdate">
     <text>V2.1</text>
