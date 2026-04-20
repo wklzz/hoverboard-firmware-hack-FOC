@@ -28,10 +28,10 @@ public:
         NimBLEDevice::init(_deviceName);
         NimBLEDevice::setMTU(517);
 
-        // --- 开启底层配对加密 (动态 Passkey) ---
-        NimBLEDevice::setSecurityAuth(true, true, true); // Bonding, MITM, Secure Connections
-        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // 声明为“带显示屏的设备”
-        NimBLEDevice::setSecurityCallbacks(this);        // 设置安全回调
+        // --- 开启底层配对加密 (Just Works 模式) ---
+        NimBLEDevice::setSecurityAuth(true, false, true); // Bonding, No MITM (Just Works), Secure Connections
+        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT); // 无输入输出能力，触发 Just Works
+        NimBLEDevice::setSecurityCallbacks(this);
 
         _server = NimBLEDevice::createServer();
         _server->setCallbacks(this);
@@ -128,9 +128,7 @@ private:
     }
 
     void onPassKeyNotify(uint32_t passkey) override {
-        Serial.println("*********************************");
-        Serial.printf("  蓝牙配对码: %06u  \n", passkey);
-        Serial.println("*********************************");
+        // Just Works 模式下不会进入这里
     }
 
     bool onSecurityRequest() override {
