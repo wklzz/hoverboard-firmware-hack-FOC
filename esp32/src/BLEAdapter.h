@@ -1,9 +1,8 @@
 #pragma once
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#include <NimBLEDevice.h>
+#include <NimBLEServer.h>
+#include <NimBLEUtils.h>
 #include <vector>
 #include <mutex>
 #include "IAdapter.h"
@@ -20,35 +19,34 @@ static constexpr char NUS_SERVICE_UUID[]  = "6E400001-B5A3-F393-E0A9-E50E24DCCA9
 static constexpr char NUS_RX_UUID[]       = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"; // Write
 static constexpr char NUS_TX_UUID[]       = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"; // Notify
 
-class BLEAdapter : public IAdapter, public BLEServerCallbacks, public BLECharacteristicCallbacks {
+class BLEAdapter : public IAdapter, public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks {
 public:
     explicit BLEAdapter(const char* deviceName = "HoverBoard-OTA")
         : _deviceName(deviceName) {}
 
     bool init() override {
-        BLEDevice::init(_deviceName);
-        BLEDevice::setMTU(517);
+        NimBLEDevice::init(_deviceName);
+        NimBLEDevice::setMTU(517);
 
-        _server = BLEDevice::createServer();
+        _server = NimBLEDevice::createServer();
         _server->setCallbacks(this);
 
-        BLEService* service = _server->createService(NUS_SERVICE_UUID);
+        NimBLEService* service = _server->createService(NUS_SERVICE_UUID);
 
         _txChar = service->createCharacteristic(NUS_TX_UUID,
-            BLECharacteristic::PROPERTY_NOTIFY);
-        _txChar->addDescriptor(new BLE2902());
+            NIMBLE_PROPERTY::NOTIFY);
 
         _rxChar = service->createCharacteristic(NUS_RX_UUID,
-            BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
         _rxChar->setCallbacks(this);
 
         service->start();
 
-        BLEAdvertising* adv = BLEDevice::getAdvertising();
+        NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
         adv->addServiceUUID(NUS_SERVICE_UUID);
         adv->setScanResponse(true);
         adv->setMinPreferred(0x06);
-        BLEDevice::startAdvertising();
+        NimBLEDevice::startAdvertising();
 
         Serial.println("[BLE] Advertising started: " + String(_deviceName));
         return true;
@@ -63,7 +61,7 @@ public:
     }
 
     void stop() override {
-        BLEDevice::stopAdvertising();
+        NimBLEDevice::stopAdvertising();
     }
 
     // 所有的协议逻辑迁移到这里
@@ -139,25 +137,25 @@ private:
         }
     }
 
-    // BLEServerCallbacks
-    void onConnect(BLEServer* pServer) override {
+    // NimBLEServerCallbacks
+    void onConnect(NimBLEServer* pServer) override {
         _connected = true;
         _authenticated = false;
         // 注意：这里仍然在回调中，但 stopAdvertising 通常较快且不涉及协议交互
-        BLEDevice::stopAdvertising();
+        NimBLEDevice::stopAdvertising();
         Serial.println("[BLE] Client connected, advertising stopped.");
     }
 
-    void onDisconnect(BLEServer* pServer) override {
+    void onDisconnect(NimBLEServer* pServer) override {
         _connected = false;
         _authenticated = false;
         _disconnectionPending = true; 
         Serial.println("[BLE] Client disconnected, restarting advertising...");
-        BLEDevice::startAdvertising();
+        NimBLEDevice::startAdvertising();
     }
 
-    // BLECharacteristicCallbacks (RX)
-    void onWrite(BLECharacteristic* pChar) override {
+    // NimBLECharacteristicCallbacks (RX)
+    void onWrite(NimBLECharacteristic* pChar) override {
         std::string val = pChar->getValue();
         if (val.empty()) return;
 
@@ -167,9 +165,9 @@ private:
     }
 
     const char*           _deviceName;
-    BLEServer*            _server  = nullptr;
-    BLECharacteristic*    _txChar  = nullptr;
-    BLECharacteristic*    _rxChar  = nullptr;
+    NimBLEServer*            _server  = nullptr;
+    NimBLECharacteristic*    _txChar  = nullptr;
+    NimBLECharacteristic*    _rxChar  = nullptr;
     volatile bool         _connected = false;
     volatile bool         _disconnectionPending = false;
     bool                  _authenticated = false;

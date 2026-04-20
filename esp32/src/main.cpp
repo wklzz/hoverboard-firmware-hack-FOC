@@ -44,9 +44,11 @@ PwmAdapter*    pwmAdapterGlobal = nullptr;
 
 void setup() {
     Serial.begin(115200);
-    Serial.println(">>> ESP32 BOOTING <<<");
+    delay(2000); // 给 USB CDC 一点初始化时间
+    Serial.println("\n\n>>> ESP32 BOOTING <<<");
+    Serial.printf("[DEBUG] Total PSRAM: %d bytes\n", ESP.getPsramSize());
+    Serial.printf("[DEBUG] Free PSRAM:  %d bytes\n", ESP.getFreePsram());
     Serial.flush();
-    delay(1000);
 
     // 加载用户模式设置
     prefs.begin("hover", false);
@@ -94,12 +96,13 @@ void setup() {
 
     // 通过工厂创建主要适配器 (BLE 或 WiFi)
 #if ADAPTER_MODE == 0
-    Serial.println("[MAIN] Mode: BLE");
+    Serial.println("[MAIN] Initializing BLE Adapter...");
     mainAdapter = AdapterFactory::create(AdapterType::BLE, BLE_DEVICE_NAME);
     if (!mainAdapter) {
         Serial.println("[MAIN] ERROR: BLE adapter creation failed!");
         while (1) delay(1000);
     }
+    Serial.println("[MAIN] BLE Adapter created, adding to connector...");
     connector.addAdapter(mainAdapter);
 
 #else
@@ -135,6 +138,7 @@ void loop() {
     }
 
     // 定期打印系统状态 (每 1 秒)
+    /* // 暂时关闭状态日志以加速 OTA
     static uint32_t lastPrint = 0;
     if (millis() - lastPrint > 1000) {
         lastPrint = millis();
@@ -151,4 +155,5 @@ void loop() {
         Serial.println();
         Serial.flush();
     }
+    */
 }

@@ -17,8 +17,8 @@ public:
     }
 
     void send(const uint8_t* data, size_t len) override {
-        // 静默串口回显，防止二进制数据干扰调试
-        // _stream.write(data, len);
+        // 允许串口回显，用于调试和获取 ACK
+        _stream.write(data, len);
     }
 
     void stop() override {
