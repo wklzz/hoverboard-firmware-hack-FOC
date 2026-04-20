@@ -42,7 +42,7 @@ public:
             NIMBLE_PROPERTY::NOTIFY);
 
         _rxChar = service->createCharacteristic(NUS_RX_UUID,
-            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::WRITE_ENC);
+            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR); // 暂时去掉 _ENC 进行测试
         _rxChar->setCallbacks(this);
 
         service->start();
@@ -116,6 +116,8 @@ private:
     void onWrite(NimBLECharacteristic* pChar) override {
         std::string val = pChar->getValue();
         if (val.empty()) return;
+
+        Serial.printf("[BLE Recv] %d bytes\n", val.length());
 
         // 仅仅将数据推入缓冲区，不在回调中做任何复杂计算或 Serial 操作
         std::lock_guard<std::mutex> lock(_bufferMutex);
