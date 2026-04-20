@@ -10,7 +10,7 @@
     "navigationBarBackgroundColor": "#000000",
     "navigationBarTitleText": "平衡车助手",
     "navigationBarTextStyle": "white",
-    "backgroundColor": "#121212"
+    "backgroundColor": "#050505"
   },
   "permission": {
     "scope.userLocation": {
