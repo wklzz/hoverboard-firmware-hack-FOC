@@ -108,15 +108,6 @@ class BLEManager {
       });
     });
 
-    this.connected = true;
-    this.log('通讯通道已就绪');
-    
-    // 由于现在使用的是硬件级 Just Works 配对，应用层无需额外认证
-    // 直接触发认证成功回调
-    if (this.onAuthCallback) {
-      this.onAuthCallback();
-    }
-
     wx.onBLECharacteristicValueChange((res) => {
       const bytes = new Uint8Array(res.value);
       // Skip frequent telemetry logging (0x90)
@@ -125,11 +116,19 @@ class BLEManager {
         console.log('[BLE Recv]', hex);
       }
 
-
       if (this.onDataCallback) {
         this.onDataCallback(res.value);
       }
     });
+
+    this.connected = true;
+    this.log('通讯通道已就绪');
+    
+    // 由于现在使用的是硬件级 Just Works 配对，应用层无需额外认证
+    // 直接触发认证成功回调
+    if (this.onAuthCallback) {
+      this.onAuthCallback();
+    }
 
   }
 
