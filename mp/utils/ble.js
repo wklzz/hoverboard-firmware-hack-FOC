@@ -110,6 +110,12 @@ class BLEManager {
 
     this.connected = true;
     this.log('通讯通道已就绪');
+    
+    // 由于现在使用的是硬件级 Just Works 配对，应用层无需额外认证
+    // 直接触发认证成功回调
+    if (this.onAuthCallback) {
+      this.onAuthCallback();
+    }
 
     wx.onBLECharacteristicValueChange((res) => {
       const bytes = new Uint8Array(res.value);
@@ -119,39 +125,12 @@ class BLEManager {
         console.log('[BLE Recv]', hex);
       }
 
-      // Authentication Handler
-      if (bytes.length >= 6 && bytes[0] === 0x7E) {
-        if (bytes[1] === CmdId.AUTH_REQ) { // Received Challenge
-          const view = new DataView(res.value);
-          if (res.value.byteLength >= 8) {
-            const challenge = view.getUint32(4, true); // Little endian
-            console.log(`[BLE Auth] Received Challenge: 0x${challenge.toString(16)}`);
-            
-            const response = (challenge ^ 0x12345678) >>> 0;
-            const payload = new Uint8Array(4);
-            const payloadView = new DataView(payload.buffer);
-            payloadView.setUint32(0, response, true);
-            
-            const frame = buildFrame(CmdId.AUTH_RES, payload);
-            this.send(frame);
-            return;
-          }
-        } else if (bytes[1] === (CmdId.AUTH_RES | 0x80)) { // AUTH_RES ACK
-          console.log('[BLE Auth] Authenticated Successfully!');
-          wx.showToast({ title: '设备已认证', icon: 'success' });
-          if (this.onAuthCallback) this.onAuthCallback();
-          return;
-        }
-      }
 
       if (this.onDataCallback) {
         this.onDataCallback(res.value);
       }
     });
 
-    // 4. 发起认证请求
-    const authReqFrame = buildFrame(CmdId.AUTH_REQ);
-    this.send(authReqFrame);
   }
 
   send(buffer) {
