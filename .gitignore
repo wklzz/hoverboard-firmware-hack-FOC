@@ -9,3 +9,7 @@ MDK-ARM/Objects/
 MDK-ARM/RTE/
 MDK-ARM/*.uvguix.*
 build/
+*.tar.gz
+admin-go/main
+admin-vue/dist
+admin-vue/node_modules

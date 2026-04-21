@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  backend:
+    build: ./admin-go
+    container_name: hoverboard-backend
+    restart: always
+    networks:
+      nanqiao:
+        aliases:
+          - backend
+
+  frontend:
+    build: ./admin-vue
+    container_name: hoverboard-frontend
+    restart: always
+    networks:
+      nanqiao:
+        aliases:
+          - frontend
+
+networks:
+  nanqiao:
+    external: true
