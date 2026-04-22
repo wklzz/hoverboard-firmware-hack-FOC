@@ -17,6 +17,9 @@
 // ⚙️ 用户配置区 — 按实际情况修改
 // ============================================================
 #define ADAPTER_MODE      0       // 0 = BLE, 1 = WiFi
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION  "v0.0.0-unknown"
+#endif
 
 #define BLE_DEVICE_NAME   "HoverBoard-OTA"
 
@@ -63,7 +66,13 @@ void setup() {
     connector.onStatusRequest = [](uint8_t* payload, uint16_t maxLen) {
         if (maxLen >= 1) {
             payload[0] = (uint8_t)ctrlMode;
-            Serial.printf("[MAIN] Reporting mode: %d\n", ctrlMode);
+            // 拼接版本号
+            const char* ver = FIRMWARE_VERSION;
+            size_t verLen = strlen(ver);
+            if (maxLen >= (1 + verLen)) {
+                memcpy(&payload[1], ver, verLen);
+                return (uint16_t)(1 + verLen);
+            }
             return (uint16_t)1;
         }
         return (uint16_t)0;

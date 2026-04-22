@@ -24,7 +24,8 @@
     </view>
 
     <view class="action-section">
-      <button wx:if="{{!updating}}" class="btn-primary" bindtap="chooseFile">选择固件文件</button>
+      <button wx:if="{{!updating}}" class="btn-cloud" bindtap="checkCloudUpdate">检测新版本</button>
+      <button wx:if="{{!updating}}" class="btn-outline" bindtap="chooseFile">本地选择文件</button>
       <button wx:if="{{updating}}" class="btn-danger" bindtap="abortUpdate">取消升级</button>
       <button wx:if="{{fileReady && !updating}}" class="btn-success" bindtap="startUpdate">开始升级</button>
     </view>

@@ -4,6 +4,8 @@ services:
     build: ./admin-go
     container_name: hoverboard-backend
     restart: always
+    volumes:
+      - ./admin-go/uploads:/app/uploads
     networks:
       nanqiao:
         aliases:

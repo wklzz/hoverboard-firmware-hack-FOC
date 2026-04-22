@@ -17,7 +17,7 @@
 // ── 帧定界符 ──────────────────────────────────────────────
 static constexpr uint8_t  PKT_SOF         = 0x7E;
 static constexpr uint8_t  ACK_MASK        = 0x80;
-static constexpr uint16_t MAX_PAYLOAD_LEN = 256;
+static constexpr uint16_t MAX_PAYLOAD_LEN = 512;
 
 // ── 协议类型 A 指令 (OTA 透传, 0x01–0x05) ─────────────────
 enum class CmdId : uint8_t {

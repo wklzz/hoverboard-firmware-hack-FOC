@@ -28,6 +28,7 @@ Page({
     // 移除 onLoad 里的自动启动，改为按需启动
     
     bleManager.onAuthCallback = () => {
+      this.setData({ connected: true });
       this.queryStatus();
     };
   },

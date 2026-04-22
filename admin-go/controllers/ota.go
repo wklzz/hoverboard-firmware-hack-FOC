@@ -44,10 +44,12 @@ func CheckUpdate(c *gin.Context) {
 	// 比较版本
 	if latestFirmware.Version != currentVersion {
 		c.JSON(http.StatusOK, gin.H{
-			"update":   true,
-			"version":  latestFirmware.Version,
-			"checksum": latestFirmware.Checksum,
-			"url":      "/api/ota/download/" + fmt.Sprintf("%d", latestFirmware.ID),
+			"update":      true,
+			"id":          latestFirmware.ID,
+			"version":     latestFirmware.Version,
+			"checksum":    latestFirmware.Checksum,
+			"description": latestFirmware.Description,
+			"url":         "/api/ota/download/" + fmt.Sprintf("%d", latestFirmware.ID),
 		})
 		return
 	}

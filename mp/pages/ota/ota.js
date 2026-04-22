@@ -1,7 +1,8 @@
 import { bleManager } from '../../utils/ble';
-import { CmdId, buildFrame, validateFrame, ACK_MASK } from '../../utils/protocol';
+import { CmdId, buildFrame, validateFrame, ACK_MASK, compareVersions } from '../../utils/protocol';
 
-const CHUNK_SIZE = 480; // Each chunk size in bytes
+const CHUNK_SIZE = 200; // Each chunk size in bytes (Reduced for compatibility with older firmware)
+const BASE_URL = 'http://wcart.wozer.cn/api';
 
 Page({
   data: {
@@ -12,12 +13,49 @@ Page({
     updating: false,
     fileReady: false,
     logs: [],
-    scrollTop: 0
+    scrollTop: 0,
+    deviceVersion: '未知'
   },
 
   onLoad() {
     this.binData = null;
     this.addLog('就绪，等待选择固件文件...');
+    if (bleManager.connected) {
+      this.queryDeviceVersion();
+    }
+  },
+
+  queryDeviceVersion() {
+    this.addLog('正在读取设备版本...');
+    
+    const originalCallback = bleManager.onDataCallback;
+    bleManager.onDataCallback = (buffer) => {
+      let bytes = new Uint8Array(buffer);
+      while (bytes.length >= 6) {
+        if (!validateFrame(bytes)) {
+          bytes = bytes.subarray(1);
+          continue;
+        }
+        const cmdId = bytes[1];
+        const plen = bytes[2] | (bytes[3] << 8);
+        if (cmdId === (CmdId.STATUS | ACK_MASK)) {
+          // Payload: [State:1][Mode:1][Version:N]
+          if (plen > 2) {
+            const versionArr = bytes.subarray(6, 4 + plen);
+            let versionStr = "";
+            for(let i=0; i<versionArr.length; i++) versionStr += String.fromCharCode(versionArr[i]);
+            this.setData({ deviceVersion: versionStr });
+            this.addLog(`设备版本: ${versionStr}`);
+          }
+          // 恢复原回调或设为 null
+          bleManager.onDataCallback = originalCallback;
+          return;
+        }
+        bytes = bytes.subarray(6 + plen);
+      }
+    };
+    
+    bleManager.send(buildFrame(CmdId.STATUS));
   },
 
   addLog(msg) {
@@ -44,10 +82,84 @@ Page({
     });
   },
 
+  async checkCloudUpdate() {
+    if (!bleManager.connected) {
+      wx.showToast({ title: '蓝牙未连接', icon: 'none' });
+      return;
+    }
+
+    this.addLog('正在检查云端版本...');
+    
+    wx.request({
+      url: `${BASE_URL}/ota/check`,
+      data: {
+        device_id: bleManager.deviceId,
+        version: this.data.deviceVersion,
+        target: 'esp32'
+      },
+      success: (res) => {
+        if (res.data && res.data.version) {
+          const update = res.data;
+          const cmp = compareVersions(update.version, this.data.deviceVersion);
+          
+          if (cmp > 0) {
+            this.addLog(`发现新版本: ${update.version}`);
+            wx.showModal({
+              title: '发现新版本',
+              content: `当前版本: ${this.data.deviceVersion}\n最新版本: ${update.version}\n描述: ${update.description || '无'}\n是否下载并升级？`,
+              success: (modalRes) => {
+                if (modalRes.confirm) {
+                  this.downloadCloudFirmware(update.url, update.version);
+                }
+              }
+            });
+          } else {
+            this.addLog(`当前版本 ${this.data.deviceVersion} 已是最新`);
+            wx.showToast({ title: '已是最新版本', icon: 'success' });
+          }
+        } else {
+          this.addLog('服务器暂无更新信息');
+        }
+      },
+      fail: () => {
+        this.addLog('检查失败，请确认网络连接');
+      }
+    });
+  },
+
+  downloadCloudFirmware(url, version) {
+    this.addLog(`正在下载固件 v${version}...`);
+    // 如果返回的是相对路径，补全域名
+    const downloadUrl = url.startsWith('http') ? url : `${BASE_URL.replace('/api', '')}${url}`;
+    
+    wx.downloadFile({
+      url: downloadUrl,
+      success: (res) => {
+        if (res.statusCode === 200) {
+          this.setData({
+            fileName: `OTA_v${version}.bin`,
+            fileSize: (res.tempFilePath.length / 1024).toFixed(1), // Note: tempFilePath length is not accurate for size
+            fileReady: true
+          });
+          this.readFile(res.tempFilePath);
+          this.addLog('云端固件下载完成，点击开始升级');
+        } else {
+          this.addLog(`下载失败: 状态码 ${res.statusCode}`);
+        }
+      },
+      fail: (e) => {
+        this.addLog(`下载出错: ${e.errMsg}`);
+      }
+    });
+  },
+
   readFile(path) {
     const fs = wx.getFileSystemManager();
     try {
       this.binData = fs.readFileSync(path);
+      this.setData({
+        fileSize: (this.binData.byteLength / 1024).toFixed(1)
+      });
       this.addLog(`文件已加载: ${this.binData.byteLength} 字节`);
     } catch (e) {
       this.addLog(`读取失败: ${e.message}`);

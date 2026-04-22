@@ -18,6 +18,7 @@ Page({
   onLoad() {
     this.initBleDataHandler();
     bleManager.onAuthCallback = () => {
+      this.setData({ connected: true });
       this.requestStatus();
     };
   },
