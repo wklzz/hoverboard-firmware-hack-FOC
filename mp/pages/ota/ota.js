@@ -171,6 +171,9 @@ Page({
 
     this.setData({ updating: true, progress: 0 });
     this.addLog('开始更新流程...');
+    
+    // 保持屏幕常亮
+    wx.setKeepScreenOn({ keepScreenOn: true });
 
     // 1. 发送 OTA_BEGIN
     const payload = new Uint8Array(5);
@@ -216,6 +219,8 @@ Page({
         } else if (cmdId === (CmdId.OTA_END | ACK_MASK)) {
           this.addLog('升级成功！设备正在重启...');
           this.setData({ progress: 100 });
+          // 恢复屏幕亮度设置
+          wx.setKeepScreenOn({ keepScreenOn: false });
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/index/index' });
           }, 2000);
@@ -257,6 +262,8 @@ Page({
   stopUpdating() {
     this.setData({ updating: false });
     bleManager.onDataCallback = null;
+    // 恢复屏幕亮度设置
+    wx.setKeepScreenOn({ keepScreenOn: false });
   },
 
   abortUpdate() {

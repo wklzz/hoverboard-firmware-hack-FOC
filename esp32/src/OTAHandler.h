@@ -15,7 +15,9 @@ public:
     OTAHandler() : _status(OTAStatus::IDLE) {}
 
     bool begin(uint32_t totalSize) {
-        if (_status == OTAStatus::UPDATING) return false;
+        // 如果之前正在升级或出错，先终止并重置
+        Update.abort();
+        _status = OTAStatus::IDLE;
         
         Serial.printf("[OTA] Starting OTA for ESP32. Size: %u bytes\n", totalSize);
         if (!Update.begin(totalSize)) {
