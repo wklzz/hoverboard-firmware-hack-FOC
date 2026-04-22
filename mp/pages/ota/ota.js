@@ -78,6 +78,10 @@ Page({
           fileReady: true
         });
         this.readFile(file.path);
+        this.addLog('本地文件选择成功，正在启动升级...');
+        setTimeout(() => {
+          this.startUpdate();
+        }, 500);
       }
     });
   },
@@ -89,6 +93,14 @@ Page({
     }
 
     this.addLog('正在检查云端版本...');
+    
+    if (this.data.deviceVersion === '未知') {
+      this.addLog('未获取到设备版本，正在重试...');
+      this.queryDeviceVersion();
+      // 等待一小会儿再继续，或者直接提示用户再次点击
+      wx.showToast({ title: '正在获取设备版本，请稍后再试', icon: 'none' });
+      return;
+    }
     
     wx.request({
       url: `${BASE_URL}/ota/check`,
@@ -142,7 +154,11 @@ Page({
             fileReady: true
           });
           this.readFile(res.tempFilePath);
-          this.addLog('云端固件下载完成，点击开始升级');
+          this.addLog('固件下载完成，正在自动启动升级...');
+          // 稍微延迟一下，确保状态更新
+          setTimeout(() => {
+            this.startUpdate();
+          }, 500);
         } else {
           this.addLog(`下载失败: 状态码 ${res.statusCode}`);
         }

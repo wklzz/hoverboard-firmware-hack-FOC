@@ -39,6 +39,27 @@
   margin-top: 10rpx;
 }
 
+.version-info {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15rpx 30rpx;
+  border-radius: 20rpx;
+  display: flex;
+  justify-content: space-between;
+  width: 80%;
+  margin-bottom: 20rpx;
+}
+
+.version-info .label {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.version-info .value {
+  font-size: 22rpx;
+  color: #00d2ff;
+  font-weight: bold;
+}
+
 /* Progress Circle */
 .progress-circle {
   position: relative;

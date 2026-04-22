@@ -21,7 +21,6 @@ func compareVersions(v1, v2 string) int {
 		return s
 	}
 	s1, s2 := clean(v1), clean(v2)
-	var p1, p2 int
 	for {
 		if s1 == "" && s2 == "" {
 			return 0

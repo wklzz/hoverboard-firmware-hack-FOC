@@ -5,6 +5,11 @@
       <text class="subtitle">ESP32 System Update</text>
     </view>
 
+    <view class="version-info">
+      <text class="label">当前设备版本:</text>
+      <text class="value">{{deviceVersion}}</text>
+    </view>
+
     <view class="status-section">
       <view class="progress-circle">
         <svg class="svg-ring" viewBox="0 0 100 100">
@@ -27,7 +32,6 @@
       <button wx:if="{{!updating}}" class="btn-cloud" bindtap="checkCloudUpdate">检测新版本</button>
       <button wx:if="{{!updating}}" class="btn-outline" bindtap="chooseFile">本地选择文件</button>
       <button wx:if="{{updating}}" class="btn-danger" bindtap="abortUpdate">取消升级</button>
-      <button wx:if="{{fileReady && !updating}}" class="btn-success" bindtap="startUpdate">开始升级</button>
     </view>
   </view>
 

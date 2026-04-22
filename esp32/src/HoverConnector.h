@@ -178,7 +178,7 @@ private:
 
     void handleStatusCmd() {
         Serial.println("[HC] Handled STATUS cmd");
-        uint8_t payload[8];
+        uint8_t payload[32];
         payload[0] = static_cast<uint8_t>(_sm.current);
         uint16_t plen = 1;
         if (onStatusRequest) {
