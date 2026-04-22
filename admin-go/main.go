@@ -14,10 +14,22 @@ func main() {
 	config.InitDB()
 
 	// 2. 自动迁移模型
-	config.DB.AutoMigrate(&models.Firmware{}, &models.Device{}, &models.OTALog{})
+	config.DB.AutoMigrate(&models.Firmware{}, &models.Device{}, &models.OTALog{}, &models.DeveloperKey{})
 
 	// 3. 设置 Gin 路由
 	r := gin.Default()
+
+	// 跨域支持 (如果需要)
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Key-ID, X-Signature")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
 
 	// 基础测试接口
 	r.GET("/ping", func(c *gin.Context) {
@@ -35,6 +47,11 @@ func main() {
 	r.POST("/api/firmwares/upload", controllers.UploadFirmware)
 	r.POST("/api/firmwares/set-current/:id", controllers.SetCurrentFirmware)
 
+	// 公钥管理
+	r.GET("/api/keys", controllers.ListKeys)
+	r.POST("/api/keys", controllers.AddKey)
+	r.DELETE("/api/keys/:id", controllers.DeleteKey)
+
 	// 设备管理
 	r.GET("/api/devices", func(c *gin.Context) {
 		var devices []models.Device
@@ -42,9 +59,10 @@ func main() {
 		c.JSON(http.StatusOK, devices)
 	})
 
-	// OTA 接口 (供硬件调用)
+	// OTA 接口 (供硬件及脚本调用)
 	r.GET("/api/ota/check", controllers.CheckUpdate)
 	r.GET("/api/ota/download/:id", controllers.DownloadFirmware)
+	r.POST("/api/ota/upload-secure", controllers.UploadSecure)
 
 	// 4. 启动服务
 	r.Run(":8080")

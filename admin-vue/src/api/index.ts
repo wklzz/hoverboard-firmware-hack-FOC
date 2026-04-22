@@ -10,4 +10,8 @@ export const uploadFirmware = (formData: FormData) => api.post('/firmwares/uploa
 export const setCurrentFirmware = (id: number) => api.post(`/firmwares/set-current/${id}`)
 export const getDevices = () => api.get('/devices')
 
+export const getKeys = () => api.get('/keys')
+export const addKey = (data: { name: string, public_key: string }) => api.post('/keys', data)
+export const deleteKey = (id: number) => api.delete(`/keys/${id}`)
+
 export default api

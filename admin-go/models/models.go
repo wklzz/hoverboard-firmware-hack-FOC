@@ -39,3 +39,13 @@ type OTALog struct {
 	ErrorMsg    string    `gorm:"type:text" json:"error_msg"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// DeveloperKey 开发者公钥模型
+type DeveloperKey struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:100;not null" json:"name"`
+	PublicKey   string    `gorm:"type:text;not null" json:"public_key"`
+	Fingerprint string    `gorm:"size:64" json:"fingerprint"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastUsedAt  time.Time `json:"last_used_at"`
+}

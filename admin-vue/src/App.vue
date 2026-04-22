@@ -19,6 +19,10 @@
           <el-icon><Cpu /></el-icon>
           <span>设备监控</span>
         </el-menu-item>
+        <el-menu-item index="/keys">
+          <el-icon><Key /></el-icon>
+          <span>开发密钥</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -35,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { Odometer, Box, Cpu } from '@element-plus/icons-vue'
+import { Odometer, Box, Cpu, Key } from '@element-plus/icons-vue'
 </script>
 
 <style>

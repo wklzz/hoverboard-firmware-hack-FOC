@@ -1,10 +1,19 @@
 package controllers
 
 import (
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"hoverboard-admin/config"
 	"hoverboard-admin/models"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -107,4 +116,128 @@ func DownloadFirmware(c *gin.Context) {
 	}
 
 	c.File(firmware.FilePath)
+}
+
+// UploadSecure 自动推送接口 (带签名验证)
+func UploadSecure(c *gin.Context) {
+	keyID := c.GetHeader("X-Key-ID")
+	signatureB64 := c.GetHeader("X-Signature")
+
+	if keyID == "" || signatureB64 == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing signature headers"})
+		return
+	}
+
+	// 获取公钥
+	var devKey models.DeveloperKey
+	if err := config.DB.First(&devKey, keyID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Key ID"})
+		return
+	}
+
+	// 解析参数
+	version := c.PostForm("version")
+	target := c.PostForm("target")
+	description := c.PostForm("description")
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+
+	// 保存临时文件计算哈希
+	tempPath := filepath.Join("uploads", "temp_"+file.Filename)
+	if err := c.SaveUploadedFile(file, tempPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save temp file"})
+		return
+	}
+	defer os.Remove(tempPath)
+
+	fileData, _ := os.ReadFile(tempPath)
+	fileHash := sha256.Sum256(fileData)
+
+	// 验证签名
+	// 待签名数据：version + "|" + target + "|" + description + "|" + hex(fileHash)
+	msg := fmt.Sprintf("%s|%s|%s|%x", version, target, description, fileHash)
+	if err := verifySignature(devKey.PublicKey, msg, signatureB64); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signature verification failed: " + err.Error()})
+		return
+	}
+
+	// 验证通过，正式保存
+	finalName := fmt.Sprintf("%s_%s_%d.bin", target, version, time.Now().Unix())
+	finalPath := filepath.Join("uploads", finalName)
+	
+	// 复制临时文件到最终路径 (因为 defer 删除了 tempPath)
+	if err := copyFile(tempPath, finalPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save firmware"})
+		return
+	}
+
+	// 计算校验和
+	checksum := fmt.Sprintf("%x", fileHash)
+
+	// 存入数据库
+	newFirmware := models.Firmware{
+		Version:     version,
+		Target:      target,
+		FilePath:    finalPath,
+		Checksum:    checksum,
+		Description: description,
+		IsCurrent:   false, // 自动推送的默认不发布，需手动在后台确认
+	}
+
+	if err := config.DB.Create(&newFirmware).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// 更新 Key 的最后使用时间
+	config.DB.Model(&devKey).Update("last_used_at", time.Now())
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Upload successful",
+		"id":      newFirmware.ID,
+		"version": newFirmware.Version,
+	})
+}
+
+func verifySignature(pubKeyPEM, message, signatureB64 string) error {
+	block, _ := pem.Decode([]byte(pubKeyPEM))
+	if block == nil {
+		return fmt.Errorf("failed to parse PEM block")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("not an RSA public key")
+	}
+
+	sig, err := base64.StdEncoding.DecodeString(signatureB64)
+	if err != nil {
+		return err
+	}
+
+	hash := sha256.Sum256([]byte(message))
+	return rsa.VerifyPKCS1v15(rsaPub, crypto.SHA256, hash[:], sig)
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
