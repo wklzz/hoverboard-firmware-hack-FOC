@@ -45,3 +45,5 @@ docker compose up -d --build backend
 ## 5. 注意事项
 
 - **数据库连接**：代码已修改为通过内网地址 `mariadb:3306` 连接，不再走公网。这要求后端容器必须加入 `nanqiao` 网络（已在 `docker-compose.yaml` 中配置）。
+- **固件持久化**：OTA 固件文件保存在 `admin-go/uploads` 目录。在 `docker-compose.yaml` 中通过卷映射 `./admin-go/uploads:/app/uploads` 实现了持久化，容器重启或重建不会丢失已上传的固件。
+- **OTA 下载地址**：后端 API 格式为 `/api/ota/download/:id`，前端会自动拼接域名。

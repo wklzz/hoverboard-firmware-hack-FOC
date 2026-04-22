@@ -112,8 +112,12 @@ export function validateFrame(bytes) {
  * @returns {number} 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 export function compareVersions(v1, v2) {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
+  // 移除开头的 'v' 或其他非数字字符
+  const s1 = v1.replace(/^[^\d]+/, '');
+  const s2 = v2.replace(/^[^\d]+/, '');
+  
+  const parts1 = s1.split('.').map(Number);
+  const parts2 = s2.split('.').map(Number);
   const len = Math.max(parts1.length, parts2.length);
   
   for (let i = 0; i < len; i++) {

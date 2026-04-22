@@ -10,6 +10,47 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// compareVersions 比较版本号 (v1 > v2 返回 1, v1 < v2 返回 -1, 相等返回 0)
+func compareVersions(v1, v2 string) int {
+	clean := func(s string) string {
+		for i, r := range s {
+			if r >= '0' && r <= '9' {
+				return s[i:]
+			}
+		}
+		return s
+	}
+	s1, s2 := clean(v1), clean(v2)
+	var p1, p2 int
+	for {
+		if s1 == "" && s2 == "" {
+			return 0
+		}
+		v1_part, v2_part := 0, 0
+		fmt.Sscanf(s1, "%d", &v1_part)
+		fmt.Sscanf(s2, "%d", &v2_part)
+
+		if v1_part > v2_part {
+			return 1
+		}
+		if v1_part < v2_part {
+			return -1
+		}
+
+		// Move to next part
+		if i := fmt.Sprint(v1_part); len(s1) > len(i) && s1[len(i)] == '.' {
+			s1 = s1[len(i)+1:]
+		} else {
+			s1 = ""
+		}
+		if i := fmt.Sprint(v2_part); len(s2) > len(i) && s2[len(i)] == '.' {
+			s2 = s2[len(i)+1:]
+		} else {
+			s2 = ""
+		}
+	}
+}
+
 // CheckUpdate 硬件请求检查更新
 func CheckUpdate(c *gin.Context) {
 	deviceID := c.Query("device_id")
@@ -41,8 +82,8 @@ func CheckUpdate(c *gin.Context) {
 		return
 	}
 
-	// 比较版本
-	if latestFirmware.Version != currentVersion {
+	// 比较版本：只有当云端版本 > 当前版本时才提示更新
+	if compareVersions(latestFirmware.Version, currentVersion) > 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"update":      true,
 			"id":          latestFirmware.ID,
