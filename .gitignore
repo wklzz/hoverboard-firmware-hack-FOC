@@ -11,5 +11,6 @@ MDK-ARM/*.uvguix.*
 build/
 *.tar.gz
 admin-go/main
+admin-go/uploads/
 admin-vue/dist
 admin-vue/node_modules
