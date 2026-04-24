@@ -106,6 +106,33 @@ func CheckUpdate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"update": false})
 }
 
+// CheckAllUpdates 检查所有目标的最新版本
+func CheckAllUpdates(c *gin.Context) {
+	var firmwares []models.Firmware
+	// 查找所有 target 的 is_current = true 的固件
+	if err := config.DB.Where("is_current = ?", true).Find(&firmwares).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"update": false, "message": "No stable version found"})
+		return
+	}
+
+	results := []gin.H{}
+	for _, fw := range firmwares {
+		results = append(results, gin.H{
+			"id":          fw.ID,
+			"version":     fw.Version,
+			"target":      fw.Target,
+			"checksum":    fw.Checksum,
+			"description": fw.Description,
+			"url":         "/api/ota/download/" + fmt.Sprintf("%d", fw.ID),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"update":    len(results) > 0,
+		"firmwares": results,
+	})
+}
+
 // DownloadFirmware 下载固件文件
 func DownloadFirmware(c *gin.Context) {
 	id := c.Param("id")

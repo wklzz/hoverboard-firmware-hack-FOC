@@ -61,6 +61,7 @@ func main() {
 
 	// OTA 接口 (供硬件及脚本调用)
 	r.GET("/api/ota/check", controllers.CheckUpdate)
+	r.GET("/api/ota/check-all", controllers.CheckAllUpdates)
 	r.GET("/api/ota/download/:id", controllers.DownloadFirmware)
 	r.POST("/api/ota/upload-secure", controllers.UploadSecure)
 
