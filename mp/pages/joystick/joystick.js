@@ -60,7 +60,7 @@ Page({
   },
 
   toggleMode() {
-    const newMode = this.data.mode === 0 ? 1 : 0;
+    const newMode = (this.data.mode + 1) % 3;
     const payload = new Uint8Array([0x01, newMode]);
     const frame = buildFrame(CmdId.CONFIG, payload);
     bleManager.send(frame);
@@ -115,9 +115,11 @@ Page({
           // payload[0] 是系统状态，payload[1] 是 ctrlMode
           const mode = frame[5]; 
           this.setData({ mode });
-          // 自动路由：如果是遥控模式，返回仪表盘
+          // 自动路由
           if (mode === 1) {
             wx.redirectTo({ url: '/pages/dashboard/dashboard' });
+          } else if (mode === 2) {
+            wx.redirectTo({ url: '/pages/rocker/rocker' });
           }
         } else if (cmdId === (CmdId.CONFIG | ACK_MASK)) {
           // 配置成功的回复，可以再次查询状态

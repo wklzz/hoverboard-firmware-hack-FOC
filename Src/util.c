@@ -47,6 +47,7 @@ extern UART_HandleTypeDef huart3;
 
 extern int16_t batVoltage;
 extern uint8_t backwardDrive;
+extern uint8_t beepDisable;
 extern uint8_t buzzerCount;             // global variable for the buzzer counts. can be 1, 2, 3, 4, 5, 6, 7...
 extern uint8_t buzzerFreq;              // global variable for the buzzer pitch. can be 1, 2, 3, 4, 5, 6, 7...
 extern uint8_t buzzerPattern;           // global variable for the buzzer pattern. can be 1, 2, 3, 4, 5, 6, 7...
@@ -1295,6 +1296,13 @@ void usart_process_command(SerialCommand *command_in, SerialCommand *command_out
   if (command_in->start == SERIAL_START_FRAME) {
     checksum = (uint16_t)(command_in->start ^ command_in->steer ^ command_in->speed);
     if (command_in->checksum == checksum) {
+      // Extract beep disable flag from steer (Bit 14 vs Bit 15)
+      beepDisable = (((command_in->steer & 0x4000) >> 14) != ((command_in->steer & 0x8000) >> 15));
+      
+      // Restore bit 14 sign extension
+      if (command_in->steer & 0x8000) command_in->steer |= 0x4000;
+      else command_in->steer &= ~0x4000;
+      
       *command_out = *command_in;
       if (usart_idx == 2) {             // Sideboard USART2
         #ifdef CONTROL_SERIAL_USART2

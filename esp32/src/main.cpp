@@ -59,21 +59,23 @@ void setup() {
 
     Serial.println("\n========================================");
     Serial.println("  Hoverboard ESP32 Connector v1.0");
-    Serial.printf("  Current Mode: %d (0=BLE/WiFi, 1=PWM)\n", ctrlMode);
+    Serial.printf("  Current Mode: %d (0=BLE, 1=PWM, 2=ROCKER)\n", ctrlMode);
     Serial.println("========================================");
 
     // 初始化 STM32 UART
     connector.onStatusRequest = [](uint8_t* payload, uint16_t maxLen) {
-        if (maxLen >= 1) {
+        if (maxLen >= 2) {
             payload[0] = (uint8_t)ctrlMode;
+            payload[1] = (uint8_t)connector.isBeepEnabled();
+            
             // 拼接版本号
             const char* ver = FIRMWARE_VERSION;
             size_t verLen = strlen(ver);
-            if (maxLen >= (1 + verLen)) {
-                memcpy(&payload[1], ver, verLen);
-                return (uint16_t)(1 + verLen);
+            if (maxLen >= (2 + verLen)) {
+                memcpy(&payload[2], ver, verLen);
+                return (uint16_t)(2 + verLen);
             }
-            return (uint16_t)1;
+            return (uint16_t)2;
         }
         return (uint16_t)0;
     };
@@ -95,13 +97,22 @@ void setup() {
     connector.onConfig = [](uint8_t key, const uint8_t* payload, uint16_t len) {
         if (key == 0x01 && len >= 1) {
             ctrlMode = payload[0];
+            if (ctrlMode > 2) ctrlMode = 0; // 限制在 0, 1, 2
             prefs.putUChar("mode", ctrlMode);
-            Serial.printf("[MAIN] Mode switched to %d via Config Command\n", ctrlMode);
+            Serial.printf("[MAIN] Mode switched to %d\n", ctrlMode);
             if (pwmAdapterGlobal) {
                 pwmAdapterGlobal->setEnabled(ctrlMode == 1);
             }
+        } else if (key == 0x02 && len >= 1) {
+            bool beeps = payload[0] != 0;
+            connector.setBeepEnabled(beeps);
+            prefs.putBool("beeps", beeps);
+            Serial.printf("[MAIN] Beeps %s via Config Command\n", beeps ? "Enabled" : "Disabled");
         }
     };
+
+    // 初始化静音设置
+    connector.setBeepEnabled(prefs.getBool("beeps", true));
 
     // 通过工厂创建主要适配器 (BLE 或 WiFi)
 #if ADAPTER_MODE == 0

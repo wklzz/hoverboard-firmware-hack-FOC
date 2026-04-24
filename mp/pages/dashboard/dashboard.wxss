@@ -150,6 +150,7 @@ page {
   border-radius: 32rpx;
   border: 1px solid rgba(255, 255, 255, 0.05);
   position: relative;
+  box-sizing: border-box;
 }
 
 .metric-card.wide {
@@ -211,6 +212,15 @@ page {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+}
+
+.settings-card .metric-header {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.settings-card switch {
+  zoom: 0.8;
 }
 
 /* Footer Actions */

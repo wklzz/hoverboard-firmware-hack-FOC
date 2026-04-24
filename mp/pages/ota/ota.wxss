@@ -9,6 +9,7 @@
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 40rpx;
+  box-sizing: border-box;
 }
 
 .ota-card {
@@ -57,6 +58,31 @@
 .version-info .value {
   font-size: 22rpx;
   color: #00d2ff;
+  font-weight: bold;
+}
+
+.target-selector {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20rpx;
+  padding: 8rpx;
+  width: 80%;
+  margin: 20rpx 0;
+}
+
+.target-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 22rpx;
+  padding: 12rpx 0;
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s;
+  border-radius: 16rpx;
+}
+
+.target-btn.active {
+  background: #00d2ff;
+  color: #000;
   font-weight: bold;
 }
 

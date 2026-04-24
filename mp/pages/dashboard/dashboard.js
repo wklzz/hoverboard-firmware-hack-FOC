@@ -13,6 +13,7 @@ Page({
     tempColor: '#00ff88',
     absCmd1: 0,
     absCmd2: 0,
+    beepEnabled: true,
   },
 
   onLoad() {
@@ -58,12 +59,15 @@ Page({
           const view = new DataView(frame.buffer, frame.byteOffset, frameLen);
           const state = view.getUint8(4);
           const mode = view.getUint8(5);
-          console.log(`[Dashboard] STATUS ACK received - State: ${state}, Mode: ${mode}`);
-          this.setData({ mode });
+          const beepEnabled = view.getUint8(6) !== 0;
+          console.log(`[Dashboard] STATUS ACK received - State: ${state}, Mode: ${mode}, Beep: ${beepEnabled}`);
+          this.setData({ mode, beepEnabled });
           
-          // 自动路由：如果是蓝牙手控模式，进入摇杆页
+          // 自动路由
           if (mode === 0) {
             wx.redirectTo({ url: '/pages/joystick/joystick' });
+          } else if (mode === 2) {
+            wx.redirectTo({ url: '/pages/rocker/rocker' });
           }
         } else if (cmdId === (CmdId.CONFIG | ACK_MASK)) {
           console.log('[Dashboard] CONFIG ACK received, requesting latest status...');
@@ -110,7 +114,7 @@ Page({
     this.switching = true;
     setTimeout(() => { this.switching = false; }, 800);
 
-    const newMode = this.data.mode === 0 ? 1 : 0;
+    const newMode = (this.data.mode + 1) % 3;
     console.log(`[Dashboard] Toggle Mode triggered, setting mode to: ${newMode}`);
     // 发送 CONFIG (0x20), key=1, val=newMode
     const payload = new Uint8Array([1, newMode]);
@@ -119,7 +123,17 @@ Page({
     
     // 乐观更新
     this.setData({ mode: newMode });
-    wx.showToast({ title: `模式: ${newMode === 0 ? '蓝牙手控' : '遥控模式'}`, icon: 'none' });
+    const modeNames = ['蓝牙手控', '遥控模式', '摇摇车'];
+    wx.showToast({ title: `模式: ${modeNames[newMode]}`, icon: 'none' });
+  },
+
+  toggleBeep(e) {
+    const enabled = e.detail.value;
+    console.log(`[Dashboard] Toggle Beep: ${enabled}`);
+    const payload = new Uint8Array([2, enabled ? 1 : 0]);
+    const frame = buildFrame(CmdId.CONFIG, payload);
+    bleManager.send(frame);
+    this.setData({ beepEnabled: enabled });
   },
 
   requestStatus() {

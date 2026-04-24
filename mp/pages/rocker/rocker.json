@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "摇摇车模式",
+  "usingComponents": {
+    "dashboard-header": "../../components/header/header"
+  }
+}

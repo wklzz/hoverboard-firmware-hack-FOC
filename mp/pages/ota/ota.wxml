@@ -2,12 +2,17 @@
   <view class="ota-card glass">
     <view class="header">
       <text class="title">固件升级</text>
-      <text class="subtitle">ESP32 System Update</text>
+      <text class="subtitle">{{target === 'esp32' ? 'ESP32 System Update' : 'STM32 Motor Control Update'}}</text>
     </view>
 
     <view class="version-info">
-      <text class="label">当前设备版本:</text>
+      <text class="label">当前版本:</text>
       <text class="value">{{deviceVersion}}</text>
+    </view>
+
+    <view class="target-selector" wx:if="{{!updating}}">
+      <view class="target-btn {{target === 'esp32' ? 'active' : ''}}" bindtap="switchTarget" data-target="esp32">ESP32</view>
+      <view class="target-btn {{target === 'stm32' ? 'active' : ''}}" bindtap="switchTarget" data-target="stm32">STM32</view>
     </view>
 
     <view class="status-section">

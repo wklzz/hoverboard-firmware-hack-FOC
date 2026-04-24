@@ -58,6 +58,7 @@ struct RuntimeCmd {                     // ESP32 → STM32 (8 B)
     int16_t  steer   = 0;
     int16_t  speed   = 0;
     uint16_t checksum;
+    static constexpr uint16_t BEEP_OFF_MASK = 0x4000;
 
     void calcChecksum() {
         checksum = start ^ (uint16_t)steer ^ (uint16_t)speed;

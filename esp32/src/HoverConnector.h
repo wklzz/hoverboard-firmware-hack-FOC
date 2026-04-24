@@ -84,6 +84,9 @@ public:
     std::function<void(uint8_t key, const uint8_t* payload, uint16_t len)> onConfig;
     std::function<uint16_t(uint8_t* payload, uint16_t maxLen)> onStatusRequest;
 
+    void setBeepEnabled(bool enabled) { _beepsEnabled = enabled; }
+    bool isBeepEnabled() const { return _beepsEnabled; }
+
 private:
     // --------------------------------------------------------
     // 从手机侧接收数据并处理
@@ -196,9 +199,21 @@ private:
 
     void handleDriveCmd(const uint8_t* payload, uint16_t len) {
         if (len < 4) return;
-        // 小端读取 steer, speed 并存入缓存
-        _currentDrive.steer = (int16_t)(payload[0] | (payload[1] << 8));
+        int16_t raw_steer = (int16_t)(payload[0] | (payload[1] << 8));
         _currentDrive.speed = (int16_t)(payload[2] | (payload[3] << 8));
+
+        // 鲁棒的标志位注入：使用 Bit 14，且确保不被符号扩展干扰
+        uint16_t u_steer = (uint16_t)raw_steer;
+        bool sign = (u_steer & 0x8000) != 0;
+        if (!_beepsEnabled) {
+            // 静音时，让 Bit 14 与符号位相反
+            if (sign) u_steer &= ~0x4000; else u_steer |= 0x4000;
+        } else {
+            // 正常时，让 Bit 14 与符号位相同（保持正常符号扩展）
+            if (sign) u_steer |= 0x4000; else u_steer &= ~0x4000;
+        }
+        _currentDrive.steer = (int16_t)u_steer;
+
         _lastDriveCmdTime = millis(); // 更新指令时间
 
         // 立即转发给 STM32，提升操作响应实时性
@@ -352,6 +367,7 @@ private:
         }
     }
 
+    bool                    _beepsEnabled = true;
     uint32_t                _lastHeartbeat = 0;
     uint32_t                _lastDriveCmdTime = 0;
     RuntimeCmd              _currentDrive;

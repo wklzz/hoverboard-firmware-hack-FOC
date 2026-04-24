@@ -49,6 +49,12 @@
         <progress percent="{{absCmd2 / 10}}" activeColor="#00d2ff" backgroundColor="rgba(255,255,255,0.05)" stroke-width="2" />
       </view>
     </view>
+    <view class="metric-card glass wide settings-card">
+      <view class="metric-header">
+        <text class="label">倒车提示音</text>
+        <switch checked="{{beepEnabled}}" bindchange="toggleBeep" color="#00d2ff" />
+      </view>
+    </view>
   </view>
 
   <view class="footer-actions">

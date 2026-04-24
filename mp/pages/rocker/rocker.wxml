@@ -1,0 +1,72 @@
+<view class="container">
+  <dashboard-header connected="{{connected}}" mode="{{mode}}" bind:toggle="toggleMode" bind:disconnect="disconnect" />
+
+  <view class="header-minimal">
+    <view class="stat-pill">
+      <text class="lab">电压</text>
+      <text class="val">{{telemetry.batVoltage || 0}}V</text>
+    </view>
+    <view class="stat-pill main">
+      <text class="lab">速度</text>
+      <text class="val">{{speed}}</text>
+    </view>
+    <view class="stat-pill">
+      <text class="lab">温度</text>
+      <text class="val">{{telemetry.boardTemp || 0}}°</text>
+    </view>
+  </view>
+
+  <!-- Rocker Control Center -->
+  <view class="rocker-control">
+    <view class="main-button {{running ? 'active' : ''}}" bindtap="toggleRocker">
+      <view class="btn-inner">
+        <text class="icon">{{running ? '■' : '▶'}}</text>
+        <text class="text">{{running ? '停止摇晃' : '开始摇晃'}}</text>
+      </view>
+      <view class="pulse" wx:if="{{running}}"></view>
+    </view>
+
+    <view class="phase-indicator" wx:if="{{running}}">
+      <text class="label">当前状态: </text>
+      <text class="val">{{currentPhase === 'forward' ? '前进中' : '后退中'}}</text>
+    </view>
+  </view>
+
+  <!-- Settings Area -->
+  <view class="settings-grid">
+    <view class="setting-card glass">
+      <view class="label">前进时间 (秒)</view>
+      <view class="stepper">
+        <view class="btn" bindtap="adjustParam" data-key="forwardTime" data-val="-0.1">-</view>
+        <text class="val">{{forwardTime}}s</text>
+        <view class="btn" bindtap="adjustParam" data-key="forwardTime" data-val="0.1">+</view>
+      </view>
+    </view>
+
+    <view class="setting-card glass">
+      <view class="label">后退时间 (秒)</view>
+      <view class="stepper">
+        <view class="btn" bindtap="adjustParam" data-key="backwardTime" data-val="-0.1">-</view>
+        <text class="val">{{backwardTime}}s</text>
+        <view class="btn" bindtap="adjustParam" data-key="backwardTime" data-val="0.1">+</view>
+      </view>
+    </view>
+
+    <view class="setting-card glass wide">
+      <view class="label-row">
+        <text class="label">摇晃动力</text>
+        <text class="val">{{powerLimit}}%</text>
+      </view>
+      <slider bindchange="powerChange" min="5" max="50" value="{{powerLimit}}" activeColor="#00ff88" backgroundColor="rgba(255,255,255,0.1)" block-size="20" />
+    </view>
+    
+    <view class="setting-card glass wide row-card">
+      <text class="label">倒车提示音</text>
+      <switch checked="{{beepEnabled}}" bindchange="toggleBeep" color="#00ff88" />
+    </view>
+  </view>
+
+  <view class="warning-text">
+    ⚠️ 自动模式下请确保周围空旷，避免碰撞
+  </view>
+</view>

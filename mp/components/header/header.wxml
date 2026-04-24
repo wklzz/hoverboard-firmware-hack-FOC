@@ -10,7 +10,7 @@
   </view>
 
   <view class="mode-selector" bindtap="onToggle">
-    <text class="mode-val">{{mode === 0 ? '蓝牙手控' : '遥控模式'}}</text>
+    <text class="mode-val">{{mode === 0 ? '蓝牙手控' : (mode === 1 ? '遥控模式' : '摇摇车模式')}}</text>
     <view class="dropdown-arrow"></view>
   </view>
 </view>
