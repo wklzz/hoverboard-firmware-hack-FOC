@@ -115,6 +115,33 @@ Page({
           // payload[0] 是系统状态，payload[1] 是 ctrlMode
           const mode = frame[5]; 
           this.setData({ mode });
+
+          // 解析版本并检查更新
+          if (plen >= 4) {
+            const espVerLen = bytes[7];
+            const espVerArr = bytes.subarray(8, 8 + espVerLen);
+            let espVersion = "";
+            for(let i=0; i<espVerArr.length; i++) espVersion += String.fromCharCode(espVerArr[i]);
+            
+            const stmVerPos = 8 + espVerLen;
+            let stmVersion = "未知";
+            if (plen >= (espVerLen + 6)) {
+              const vRaw = bytes[stmVerPos];
+              if (vRaw > 0) {
+                const major = Math.floor(vRaw / 10);
+                const minor = vRaw % 10;
+                stmVersion = `v${major}.${minor}`;
+              }
+            }
+
+            // 引入 otaHelper 并检查更新
+            const { otaHelper } = require('../../utils/ota');
+            otaHelper.checkAndPrompt({
+              esp: espVersion,
+              stm: stmVersion
+            });
+          }
+
           // 自动路由
           if (mode === 1) {
             wx.redirectTo({ url: '/pages/dashboard/dashboard' });

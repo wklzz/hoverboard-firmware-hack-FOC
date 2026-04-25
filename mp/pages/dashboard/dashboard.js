@@ -1,5 +1,6 @@
 import { bleManager } from '../../utils/ble';
 import { CmdId, buildFrame, parseTelemetry, validateFrame, ACK_MASK } from '../../utils/protocol';
+import { otaHelper } from '../../utils/ota';
 
 Page({
   data: {
@@ -62,8 +63,43 @@ Page({
           const beepEnabled = view.getUint8(6) !== 0;
           console.log(`[Dashboard] STATUS ACK received - State: ${state}, Mode: ${mode}, Beep: ${beepEnabled}`);
           this.setData({ mode, beepEnabled });
+
+          // 解析版本号 (新结构)
+          if (plen >= 4) {
+            const espVerLen = bytes[7];
+            const espVerArr = bytes.subarray(8, 8 + espVerLen);
+            let espVersion = "";
+            for(let i=0; i<espVerArr.length; i++) espVersion += String.fromCharCode(espVerArr[i]);
+            
+            // STM32 版本 (小端 uint16)
+            const stmVerPos = 8 + espVerLen;
+            let stmVersion = "未知";
+            if (plen >= (espVerLen + 6)) {
+              const vRaw = bytes[stmVerPos]; // 8-bit version
+              if (vRaw > 0) {
+                // 将 10 转为 v1.0
+                const major = Math.floor(vRaw / 10);
+                const minor = vRaw % 10;
+                stmVersion = `v${major}.${minor}`;
+              }
+            }
+            
+            console.log(`[Dashboard] ESP: ${espVersion}, STM: ${stmVersion}`);
+            this.setData({ espVersion, stmVersion });
+            
+            // 自动检查 OTA (传入解析后的版本对象)
+            this.checkingOta = true;
+            otaHelper.checkAndPrompt({
+              esp: espVersion,
+              stm: stmVersion
+            }).then(() => {
+              this.checkingOta = false;
+            });
+          }
           
-          // 自动路由
+          // 自动路由 (如果正在检查 OTA，则暂不跳转)
+          if (this.checkingOta) return;
+
           if (mode === 0) {
             wx.redirectTo({ url: '/pages/joystick/joystick' });
           } else if (mode === 2) {

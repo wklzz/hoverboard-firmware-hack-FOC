@@ -64,18 +64,19 @@ void setup() {
 
     // 初始化 STM32 UART
     connector.onStatusRequest = [](uint8_t* payload, uint16_t maxLen) {
-        if (maxLen >= 2) {
+        if (maxLen >= 3) {
             payload[0] = (uint8_t)ctrlMode;
             payload[1] = (uint8_t)connector.isBeepEnabled();
             
-            // 拼接版本号
             const char* ver = FIRMWARE_VERSION;
-            size_t verLen = strlen(ver);
-            if (maxLen >= (2 + verLen)) {
-                memcpy(&payload[2], ver, verLen);
-                return (uint16_t)(2 + verLen);
+            uint8_t verLen = (uint8_t)strlen(ver);
+            payload[2] = verLen; // 增加版本长度，便于解析
+            
+            if (maxLen >= (3 + verLen)) {
+                memcpy(&payload[3], ver, verLen);
+                return (uint16_t)(3 + verLen);
             }
-            return (uint16_t)2;
+            return (uint16_t)3;
         }
         return (uint16_t)0;
     };

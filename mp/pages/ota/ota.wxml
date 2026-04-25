@@ -1,8 +1,12 @@
 <view class="container">
   <view class="ota-card glass">
-    <view class="header">
+    <view class="header" wx:if="{{!autoMode}}">
       <text class="title">固件升级</text>
       <text class="subtitle">{{target === 'esp32' ? 'ESP32 System Update' : 'STM32 Motor Control Update'}}</text>
+    </view>
+    <view class="header" wx:else>
+      <text class="title">自动升级中</text>
+      <text class="subtitle">任务 {{currentQueueIdx + 1}} / {{queue.length}}</text>
     </view>
 
     <view class="version-info">
@@ -10,7 +14,7 @@
       <text class="value">{{deviceVersion}}</text>
     </view>
 
-    <view class="target-selector" wx:if="{{!updating}}">
+    <view class="target-selector" wx:if="{{!updating && !autoMode}}">
       <view class="target-btn {{target === 'esp32' ? 'active' : ''}}" bindtap="switchTarget" data-target="esp32">ESP32</view>
       <view class="target-btn {{target === 'stm32' ? 'active' : ''}}" bindtap="switchTarget" data-target="stm32">STM32</view>
     </view>

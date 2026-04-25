@@ -44,12 +44,22 @@ public:
     }
 
     void update() {
-        // 1. 读取 STM32 返回的串口数据
+        // 1. 如果处于 OTA 状态，开启“上帝模式”：原始字节零延迟透传
+        // 不再进行协议解析，确保 STM32 Bootloader 的任何反馈都能第一时间到达手机
+        if (_sm.current == SystemState::OTA) {
+            while (_uart.available()) {
+                uint8_t c = _uart.read();
+                broadcastToAdapters(&c, 1);
+            }
+            return;
+        }
+
+        // 2. 正常运行模式：读取 STM32 返回的串口数据并进行协议解析
         while (_uart.available()) {
             uint8_t b = _uart.read();
             _stm32RxBuffer.push_back(b);
         }
-
+        
         if (!_stm32RxBuffer.empty()) {
             // 判断是 Protocol A 的回包 还是 Protocol B 的 Telemetry 包
             if (_stm32RxBuffer[0] == PKT_SOF) {
@@ -156,7 +166,7 @@ private:
                         startOtaHandover();
                         _sm.current = SystemState::OTA; 
                     }
-                    Serial.printf("[HC] -> STM32 OTA CMD=0x%02X len=%u\n", cmdId, payloadLen);
+                    // 直接透传整个 Protocol A 帧给 STM32
                     _uart.write(frame, frameLen);
                     _uart.flush();
                     break;
@@ -180,14 +190,19 @@ private:
     }
 
     void handleStatusCmd() {
-        Serial.println("[HC] Handled STATUS cmd");
-        uint8_t payload[32];
+        // Payload: [State:1][Mode:1][BeepStatus:1][ESP_Version_Len:1][ESP_Version:N][STM_Version:2 LE]
+        uint8_t payload[64];
         payload[0] = static_cast<uint8_t>(_sm.current);
         uint16_t plen = 1;
         if (onStatusRequest) {
-            plen += onStatusRequest(&payload[1], sizeof(payload) - 1);
+            plen += onStatusRequest(&payload[1], sizeof(payload) - 3);
         }
-        sendResponseToAdapters(static_cast<uint8_t>(CmdId::STATUS) | ACK_MASK, payload, plen);
+        
+        // STM32 版本 (小端)
+        payload[plen] = static_cast<uint8_t>(_lastStm32Version & 0xFF);
+        payload[plen + 1] = static_cast<uint8_t>((_lastStm32Version >> 8) & 0xFF);
+        
+        sendResponseToAdapters(static_cast<uint8_t>(CmdId::STATUS) | ACK_MASK, payload, plen + 2);
     }
 
     void handleConfigCmd(const uint8_t* payload, uint16_t len) {
@@ -279,8 +294,11 @@ private:
         Serial.println("[HC] Handover: Sending $REBOOT to STM32...");
         _uart.write((const uint8_t*)"$REBOOT\r\n", 9);
         _uart.flush();
-        // 等待 STM32 完成重启并进入 Bootloader
-        delay(200);
+        // 等待 STM32 完成重启并进入 Bootloader (延长到 500ms 保证稳定性)
+        delay(500);
+        // 清空串口缓冲区，丢弃 STM32 启动时的调试打印，防止干扰协议解析
+        while(_uart.available()) _uart.read();
+        Serial.println("[HC] STM32 Rebooted. Entering Transparent Proxy Mode.");
     }
 
     void handleDisconnection() {
@@ -334,6 +352,7 @@ private:
             RuntimeFeedback fb;
             memcpy(&fb, _stm32RxBuffer.data(), sizeof(RuntimeFeedback));
             if (fb.isValid()) {
+                _lastStm32Version = (fb.cmdLed >> 8); // Extract version from high 8 bits
                 // 封装为 TELEMETRY 包发给手机
                 // 节流处理：手机端不需要 100Hz 的数据，限制为 5Hz (200ms) 以消除小程序 setData 卡顿
                 static uint32_t lastBleTelemetry = 0;
@@ -368,6 +387,7 @@ private:
     }
 
     bool                    _beepsEnabled = true;
+    uint16_t                _lastStm32Version = 0;
     uint32_t                _lastHeartbeat = 0;
     uint32_t                _lastDriveCmdTime = 0;
     RuntimeCmd              _currentDrive;

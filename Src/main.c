@@ -126,7 +126,7 @@ typedef struct{
   int16_t   speedL_meas;
   int16_t   batVoltage;
   int16_t   boardTemp;
-  uint16_t  cmdLed;
+  uint16_t  cmdLed; // Low 8 bits: LED status, High 8 bits: Firmware Version
   uint16_t  checksum;
 } SerialFeedback;
 static SerialFeedback Feedback;
@@ -517,10 +517,12 @@ int main(void) {
         Feedback.speedL_meas	  = (int16_t)rtY_Left.n_mot;
         Feedback.batVoltage	    = (int16_t)batVoltageCalib;
         Feedback.boardTemp	    = (int16_t)board_temp_deg_c;
+        // Version packed in high bits (e.g. 10 for v1.0)
+        uint8_t stmVersion = 10; 
 
         #if defined(FEEDBACK_SERIAL_USART2)
           if(__HAL_DMA_GET_COUNTER(huart2.hdmatx) == 0) {
-            Feedback.cmdLed     = (uint16_t)sideboard_leds_L;
+            Feedback.cmdLed     = (uint16_t)sideboard_leds_L | (uint16_t)(stmVersion << 8);
             Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedR_meas ^ Feedback.speedL_meas 
                                            ^ Feedback.batVoltage ^ Feedback.boardTemp ^ Feedback.cmdLed);
 
@@ -529,7 +531,7 @@ int main(void) {
         #endif
         #if defined(FEEDBACK_SERIAL_USART3)
           if(__HAL_DMA_GET_COUNTER(huart3.hdmatx) == 0) {
-            Feedback.cmdLed     = (uint16_t)sideboard_leds_R;
+            Feedback.cmdLed     = (uint16_t)sideboard_leds_R | (uint16_t)(stmVersion << 8);
             Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedR_meas ^ Feedback.speedL_meas 
                                            ^ Feedback.batVoltage ^ Feedback.boardTemp ^ Feedback.cmdLed);
 

@@ -1,5 +1,6 @@
 import { bleManager } from '../../utils/ble';
 import { CmdId, buildFrame, validateFrame, ACK_MASK, compareVersions } from '../../utils/protocol';
+import { otaHelper } from '../../utils/ota';
 
 const CHUNK_SIZE = 200; // Each chunk size in bytes (Reduced for compatibility with older firmware)
 const BASE_URL = 'http://wcart.wozer.cn/api';
@@ -15,15 +16,62 @@ Page({
     logs: [],
     scrollTop: 0,
     deviceVersion: '未知',
-    target: 'esp32'
+    versions: { esp: '未知', stm: '未知' },
+    target: 'esp32',
+    queue: [],
+    currentQueueIdx: -1,
+    autoMode: false
   },
 
-  onLoad() {
+  onLoad(options) {
+    const app = getApp();
+    console.log('[OTA] onLoad Options:', options);
+    console.log('[OTA] onLoad globalData.otaQueue:', app.globalData.otaQueue);
+    
     this.binData = null;
-    this.addLog('就绪，等待选择固件文件...');
-    if (bleManager.connected) {
+    this.addLog('系统就绪。');
+    
+    let queue = null;
+    let isAuto = options.auto === '1' || options.auto === 'true';
+
+    // 优先从全局变量读取队列
+    if (app.globalData.otaQueue) {
+      console.log('[OTA] Detected queue in globalData');
+      queue = app.globalData.otaQueue;
+      isAuto = true;
+      app.globalData.otaQueue = null; 
+    } else if (options.queue) {
+      console.log('[OTA] Detected queue in URL options');
+      try {
+        queue = JSON.parse(decodeURIComponent(options.queue));
+      } catch (e) {
+        console.error('[OTA] URL Queue Parse Error:', e);
+      }
+    }
+    
+    console.log('[OTA] Final Decision - isAuto:', isAuto, 'queue:', queue);
+    
+    if (isAuto && queue) {
+      console.log('[OTA] Starting Auto-Upgrade Sequence...');
+      this.setData({ 
+        queue, 
+        autoMode: true,
+        currentQueueIdx: 0 
+      });
+      this.addLog(`进入自动模式，待升级项: ${queue.length}`);
+      this.processQueueItem(0);
+    } else if (bleManager.connected) {
       this.queryDeviceVersion();
     }
+  },
+
+  processQueueItem(idx) {
+    const item = this.data.queue[idx];
+    if (!item) return;
+
+    this.setData({ target: item.target });
+    this.addLog(`[队列 ${idx+1}/${this.data.queue.length}] 正在准备 ${item.target.toUpperCase()} 固件 v${item.version}...`);
+    this.downloadCloudFirmware(item.url, item.version, true);
   },
 
   queryDeviceVersion() {
@@ -40,13 +88,30 @@ Page({
         const cmdId = bytes[1];
         const plen = bytes[2] | (bytes[3] << 8);
         if (cmdId === (CmdId.STATUS | ACK_MASK)) {
-          // Payload: [State:1][Mode:1][Version:N]
-          if (plen > 2) {
-            const versionArr = bytes.subarray(6, 4 + plen);
-            let versionStr = "";
-            for(let i=0; i<versionArr.length; i++) versionStr += String.fromCharCode(versionArr[i]);
-            this.setData({ deviceVersion: versionStr });
-            this.addLog(`设备版本: ${versionStr}`);
+          // Payload: [State:1][Mode:1][BeepStatus:1][ESP_Version_Len:1][ESP_Version:N][STM_Version:2 LE]
+          if (plen >= 4) {
+            const espVerLen = bytes[7];
+            const espVerArr = bytes.subarray(8, 8 + espVerLen);
+            let espVersion = "";
+            for(let i=0; i<espVerArr.length; i++) espVersion += String.fromCharCode(espVerArr[i]);
+            
+            // STM32 版本
+            const stmVerPos = 8 + espVerLen;
+            let stmVersion = "未知";
+            if (plen >= (espVerLen + 6)) {
+              const vRaw = bytes[stmVerPos]; // 8-bit version
+              if (vRaw > 0) {
+                const major = Math.floor(vRaw / 10);
+                const minor = vRaw % 10;
+                stmVersion = `v${major}.${minor}`;
+              }
+            }
+            const fullVersion = `ESP:${espVersion} STM:${stmVersion}`;
+            this.setData({ 
+              deviceVersion: fullVersion,
+              versions: { esp: espVersion, stm: stmVersion }
+            });
+            this.addLog(`设备版本: ${fullVersion}`);
           }
           // 恢复原回调或设为 null
           bleManager.onDataCallback = originalCallback;
@@ -88,61 +153,11 @@ Page({
   },
 
   async checkCloudUpdate() {
-    if (!bleManager.connected) {
-      wx.showToast({ title: '蓝牙未连接', icon: 'none' });
-      return;
-    }
-
-    this.addLog('正在检查云端版本...');
-    
-    if (this.data.deviceVersion === '未知') {
-      this.addLog('未获取到设备版本，正在重试...');
-      this.queryDeviceVersion();
-      // 等待一小会儿再继续，或者直接提示用户再次点击
-      wx.showToast({ title: '正在获取设备版本，请稍后再试', icon: 'none' });
-      return;
-    }
-    
-    wx.request({
-      url: `${BASE_URL}/ota/check`,
-      data: {
-        device_id: bleManager.deviceId,
-        version: this.data.deviceVersion,
-        target: this.data.target
-      },
-      success: (res) => {
-        if (res.data && res.data.version) {
-          const update = res.data;
-          const cmp = compareVersions(update.version, this.data.deviceVersion);
-          
-          if (cmp > 0) {
-            this.addLog(`发现新版本: ${update.version}`);
-            wx.showModal({
-              title: '发现新版本',
-              content: `当前版本: ${this.data.deviceVersion}\n最新版本: ${update.version}\n描述: ${update.description || '无'}\n是否下载并升级？`,
-              success: (modalRes) => {
-                if (modalRes.confirm) {
-                  this.downloadCloudFirmware(update.url, update.version);
-                }
-              }
-            });
-          } else {
-            this.addLog(`当前版本 ${this.data.deviceVersion} 已是最新`);
-            wx.showToast({ title: '已是最新版本', icon: 'success' });
-          }
-        } else {
-          this.addLog('服务器暂无更新信息');
-        }
-      },
-      fail: () => {
-        this.addLog('检查失败，请确认网络连接');
-      }
-    });
+    otaHelper.checkAndPrompt(this.data.versions, true);
   },
 
-  downloadCloudFirmware(url, version) {
+  downloadCloudFirmware(url, version, autoStart = false) {
     this.addLog(`正在下载固件 v${version}...`);
-    // 如果返回的是相对路径，补全域名
     const downloadUrl = url.startsWith('http') ? url : `${BASE_URL.replace('/api', '')}${url}`;
     
     wx.downloadFile({
@@ -151,15 +166,22 @@ Page({
         if (res.statusCode === 200) {
           this.setData({
             fileName: `OTA_v${version}.bin`,
-            fileSize: (res.tempFilePath.length / 1024).toFixed(1), // Note: tempFilePath length is not accurate for size
             fileReady: true
           });
           this.readFile(res.tempFilePath);
-          this.addLog('固件下载完成，正在自动启动升级...');
-          // 稍微延迟一下，确保状态更新
-          setTimeout(() => {
-            this.startUpdate();
-          }, 500);
+          this.addLog('固件下载完成。');
+          if (autoStart) {
+            this.addLog('准备启动升级...');
+            const waitAndStart = () => {
+              if (bleManager.connected) {
+                this.startUpdate();
+              } else {
+                this.addLog('等待蓝牙重连...');
+                setTimeout(waitAndStart, 2000);
+              }
+            };
+            setTimeout(waitAndStart, 1000);
+          }
         } else {
           this.addLog(`下载失败: 状态码 ${res.statusCode}`);
         }
@@ -190,10 +212,14 @@ Page({
   },
 
   async startUpdate() {
-    if (!this.binData || !bleManager.connected) return;
+    if (!this.binData) return;
+    if (!bleManager.connected) {
+      this.addLog('[-] 升级中止: 蓝牙未连接');
+      return;
+    }
 
     this.setData({ updating: true, progress: 0 });
-    this.addLog('开始更新流程...');
+    this.addLog(`开始升级 [${this.data.target.toUpperCase()}] ...`);
     
     // 保持屏幕常亮
     wx.setKeepScreenOn({ keepScreenOn: true });
@@ -248,13 +274,9 @@ Page({
           const received = (frame[4]) | (frame[5] << 8) | (frame[6] << 16) | (frame[7] << 24);
           this.handleChunkAck(received, startTime);
         } else if (cmdId === (CmdId.OTA_END | ACK_MASK)) {
-          this.addLog('升级成功！设备正在重启...');
+          this.addLog('ESP32 升级成功！正在校验并进入下一步...');
           this.setData({ progress: 100 });
-          // 恢复屏幕亮度设置
-          wx.setKeepScreenOn({ keepScreenOn: false });
-          setTimeout(() => {
-            wx.reLaunch({ url: '/pages/index/index' });
-          }, 2000);
+          this.handleUpdateFinished();
         }
 
         bytes = bytes.subarray(frameLen);
@@ -332,10 +354,9 @@ Page({
         }
         else if (cmdId === (CmdId.BOOT | ACK_MASK)) {
           if (frame[4] === 0) {
-            this.addLog('[STM32] 升级成功！主控正在启动应用...');
+            this.addLog('[STM32] 升级成功！主控已重启。');
             this.setData({ progress: 100 });
-            wx.setKeepScreenOn({ keepScreenOn: false });
-            setTimeout(() => { wx.reLaunch({ url: '/pages/index/index' }); }, 2000);
+            this.handleUpdateFinished();
           } else {
             this.addLog('[-] 跳转失败，应用区可能无效！');
             this.stopUpdating();
@@ -407,5 +428,31 @@ Page({
   abortUpdate() {
     this.addLog('更新被用户中止');
     this.stopUpdating();
+  },
+
+  handleUpdateFinished() {
+    const nextIdx = this.data.currentQueueIdx + 1;
+    if (this.data.autoMode && nextIdx < this.data.queue.length) {
+      this.addLog(`>>> 成功完成任务，准备下一步 (${nextIdx + 1}/${this.data.queue.length})...`);
+      this.setData({ currentQueueIdx: nextIdx, updating: false, progress: 0 });
+      
+      this.addLog('等待设备重启并重连 (约 5-10 秒)...');
+      const waitForReconnect = () => {
+        if (bleManager.connected) {
+          this.addLog('蓝牙已恢复连接，开始下载下一个固件...');
+          this.processQueueItem(nextIdx);
+        } else {
+          setTimeout(waitForReconnect, 2000);
+        }
+      };
+      // 先给 3 秒让它断开
+      setTimeout(waitForReconnect, 3000);
+    } else {
+      this.addLog('所有升级任务已完成！设备正在重启...');
+      wx.setKeepScreenOn({ keepScreenOn: false });
+      setTimeout(() => {
+        wx.reLaunch({ url: '/pages/index/index' });
+      }, 2000);
+    }
   }
 });

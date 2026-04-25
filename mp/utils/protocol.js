@@ -112,9 +112,9 @@ export function validateFrame(bytes) {
  * @returns {number} 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 export function compareVersions(v1, v2) {
-  // 移除开头的 'v' 或其他非数字字符
-  const s1 = v1.replace(/^[^\d]+/, '');
-  const s2 = v2.replace(/^[^\d]+/, '');
+  // 只保留数字和点号，移除 v, vv, -dirty 等干扰字符
+  const s1 = (v1 || "").toString().replace(/[^\d.]/g, '');
+  const s2 = (v2 || "").toString().replace(/[^\d.]/g, '');
   
   const parts1 = s1.split('.').map(Number);
   const parts2 = s2.split('.').map(Number);

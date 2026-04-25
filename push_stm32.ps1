@@ -1,8 +1,8 @@
 # STM32 Auto Push for OTA Testing
 $binPath = ".pio\build\VARIANT_USART_BL\firmware.bin"
-$newV = "1.0.1"
+$newV = "1.1.0"
 $target = "stm32"
-$description = "STM32 OTA Test Build"
+$description = "STM32 Stability Fix: Transparent OTA & Buffer Purge"
 $developerKeyID = "3"
 $developerKeyPath = "$HOME\.hoverboard\id_rsa"
 $fullUri = "https://wcart.wozer.cn/api/ota/upload-secure"
